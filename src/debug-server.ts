@@ -461,7 +461,13 @@ export class DebugServer extends EventEmitter implements DebugServerEvents {
                     if (!session) {
                         throw new Error('No active debug session');
                     }
-                    await session.customRequest('continue');
+
+                    // Get the current thread ID (required by DAP spec)
+                    const threads = await session.customRequest('threads');
+                    const threadId = threads.threads[0].id;
+
+                    // Continue with the thread ID
+                    await session.customRequest('continue', { threadId });
                     results.push('Continued execution');
                     break;
                 }

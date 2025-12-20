@@ -4,6 +4,11 @@ All notable changes to the "claude-debugs-for-you" extension will be documented 
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## 0.1.2
+
+- Report exceptions to LLM
+- Properly send threadId to comply with DAP, fixing issues with debugging with C++, etc.
+
 
 ## 0.1.1
 

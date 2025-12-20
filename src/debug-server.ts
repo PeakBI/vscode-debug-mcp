@@ -339,7 +339,7 @@ export class DebugServer extends EventEmitter implements DebugServerEvents {
         // Check if we're at a breakpoint
         try {
             const threads = await session.customRequest('threads');
-            const threadId = threads.threads[0].id;
+            const threadId = threads?.threads?.[0]?.id;
 
             const stack = await session.customRequest('stackTrace', { threadId });
             if (stack.stackFrames && stack.stackFrames.length > 0) {

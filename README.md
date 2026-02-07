@@ -1,29 +1,29 @@
-# <img src="./images/claude-debugs-for-you.png" width="64" height="64" alt="description" align="center"> Claude Debugs For You
+# <img src="./images/vscode-debug-mcp.png" width="64" height="64" alt="description" align="center"> VSCode Debug MCP
 
-[![Badge](https://img.shields.io/badge/Visual%20Studio%20Marketplace-0.1.2-blue.svg)](https://marketplace.visualstudio.com/items?itemName=JasonMcGhee.claude-debugs-for-you)
+[![Badge](https://img.shields.io/badge/Visual%20Studio%20Marketplace-0.1.2-blue.svg)](https://marketplace.visualstudio.com/items?itemName=PeakBI.vscode-debug-mcp)
 
 _aka Vibe Debugging_
 
-### Enable Claude (or any other LLM) to interactively debug your code
+### Enable an LLM to interactively debug your code
 
-This is an [MCP](https://docs.anthropic.com/en/docs/build-with-claude/mcp) Server and VS Code extension which enables claude to interactively debug and evaluate expressions.
+This is an [MCP](https://docs.anthropic.com/en/docs/build-with-claude/mcp) Server and VS Code extension which enables LLMs to interactively debug and evaluate expressions.
 
-That means it should also work with other models / clients etc. but I only demonstrate it with Claude Desktop and Continue here.
+That means it should work with various models / clients etc.
 
 It's language-agnostic, assuming debugger console support and valid launch.json for debugging in VSCode.
 
 ## Getting Started
 
-1. Download the extension from [releases](https://github.com/jasonjmcghee/claude-debugs-for-you/releases/) or [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=JasonMcGhee.claude-debugs-for-you)
+1. Download the extension from [releases](https://github.com/PeakBI/vscode-debug-mcp/releases/) or [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=PeakBI.vscode-debug-mcp)
 2. Install the extension
   - If using `.vsix` directly, go to the three dots in "Extensions" in VS Code and choose "Install from VSIX..."
-3. You will see a new status menu item "Claude Debugs For You" which shows if it is running properly (check) or failed to startup (x)
+3. You will see a new status menu item "VSCode Debug MCP" which shows if it is running properly (check) or failed to startup (x)
 
-<img width="314" alt="Screenshot 2025-03-22 at 9 51 22 PM" src="https://github.com/user-attachments/assets/2cd65e0d-4c1d-4fb6-b9ea-3995149b4043" />
+<img width="314" alt="Screenshot 2025-03-22 at 9 51 22 PM" src="https://github.com/user-attachments/assets/2cd65e0d-4c1d-4fb6-b9ea-3995149b4043" />
 
 You can click this status menu for the commands available
 
-<img width="510" alt="Screenshot 2025-03-22 at 9 59 22 PM" src="https://github.com/user-attachments/assets/54e339e3-81f8-4ef2-a201-6742aa2c97a8" />
+<img width="510" alt="Screenshot 2025-03-22 at 9 59 22 PM" src="https://github.com/user-attachments/assets/54e339e3-81f8-4ef2-a201-6742aa2c97a8" />
 
 ### Follow one of the options below, depending on your setup
 
@@ -93,7 +93,7 @@ https://github.com/user-attachments/assets/3a0a879d-2db7-4a3f-ab43-796c22a0f1ef
   [Read the docs!](https://docs.continue.dev/customize/tools)
 
   Configuration:
-  
+
   ```json
   {
     ...
@@ -104,7 +104,7 @@ https://github.com/user-attachments/assets/3a0a879d-2db7-4a3f-ab43-796c22a0f1ef
             "type": "stdio",
             "command": "node",
             "args": [
-              "/Users/jason/Library/Application Support/Code/User/globalStorage/jasonmcghee.claude-debugs-for-you/mcp-debug.js"
+              "/Users/jason/Library/Application Support/Code/User/globalStorage/peakbi.vscode-debug-mcp/mcp-debug.js"
             ]
           }
         }
@@ -159,11 +159,11 @@ i am building `longest_substring_with_k_distinct` and for some reason it's not w
 
 ## Other things worth mentioning
 
-When you start multiple vs code windows, you'll see a pop-up. You can gracefully hand-off "Claude Debugs For You" between windows.
+When you start multiple vs code windows, you'll see a pop-up. You can gracefully hand-off "VSCode Debug MCP" between windows.
 
 You can also disable autostart. Then you'll just need to click the status menu and select "Start Server".
 
-<img width="395" alt="Screenshot 2025-03-22 at 10 08 52 PM" src="https://github.com/user-attachments/assets/2b6d1b61-a2c6-4447-8054-b4dd02a716e8" />
+<img width="395" alt="Screenshot 2025-03-22 at 10 08 52 PM" src="https://github.com/user-attachments/assets/2b6d1b61-a2c6-4447-8054-b4dd02a716e8" />
 
 
 ## Short list of ideas

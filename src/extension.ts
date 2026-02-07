@@ -34,16 +34,16 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Create status bar item
     const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right);
-    statusBarItem.command = 'claude-debugs-for-you.showCommands';
+    statusBarItem.command = 'vscode-debug-mcp.showCommands';
 
     // Update status bar with server state
     function updateStatusBar() {
         if (server.isRunning) {
-            statusBarItem.text = "$(check) Claude Debugs For You";
-            statusBarItem.tooltip = "Claude Debugs For You (Running) - Click to show commands";
+            statusBarItem.text = "$(check) VSCode Debug MCP";
+            statusBarItem.tooltip = "VSCode Debug MCP (Running) - Click to show commands";
         } else {
-            statusBarItem.text = "$(x) Claude Debugs For You";
-            statusBarItem.tooltip = "Claude Debugs For You (Stopped) - Click to show commands";
+            statusBarItem.text = "$(x) VSCode Debug MCP";
+            statusBarItem.tooltip = "VSCode Debug MCP (Stopped) - Click to show commands";
         }
         statusBarItem.show();
     }
@@ -74,7 +74,7 @@ export function activate(context: vscode.ExtensionContext) {
                 if (server.isRunning) {
                     // Port changed, restart server with new port
                     vscode.window.showInformationMessage(`Port changed to ${newPort}. Restarting server...`);
-                    await vscode.commands.executeCommand('vscode-mcp-debug.restart');
+                    await vscode.commands.executeCommand('vscode-debug-mcp.restart');
                 }
             } else if (e.affectsConfiguration('mcpDebug')) {
                 updateStatusBar();
@@ -174,29 +174,29 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(
         statusBarItem,
-        vscode.commands.registerCommand('claude-debugs-for-you.showCommands', async () => {
+        vscode.commands.registerCommand('vscode-debug-mcp.showCommands', async () => {
             const updatedConfig = vscode.workspace.getConfiguration('mcpDebug');
             const currentPort = updatedConfig.get<number>('port') ?? 4711;
             const commands = [
                 // Show either Start or Stop based on server state
                 server.isRunning
-                    ? { label: "Stop Server", command: 'vscode-mcp-debug.stop' }
-                    : { label: "Start Server", command: 'vscode-mcp-debug.restart' },
-                { label: `Set Port (currently: ${currentPort})`, command: 'vscode-mcp-debug.setPort' },
-                { label: `${updatedConfig.get<boolean>('autostart') ? 'Disable' : 'Enable'} Autostart`, command: 'vscode-mcp-debug.toggleAutostart' },
-                { label: "Copy stdio path", command: 'vscode-mcp-debug.copyStdioPath' },
-                { label: "Copy SSE address", command: 'vscode-mcp-debug.copySseAddress' }
+                    ? { label: "Stop Server", command: 'vscode-debug-mcp.stop' }
+                    : { label: "Start Server", command: 'vscode-debug-mcp.restart' },
+                { label: `Set Port (currently: ${currentPort})`, command: 'vscode-debug-mcp.setPort' },
+                { label: `${updatedConfig.get<boolean>('autostart') ? 'Disable' : 'Enable'} Autostart`, command: 'vscode-debug-mcp.toggleAutostart' },
+                { label: "Copy stdio path", command: 'vscode-debug-mcp.copyStdioPath' },
+                { label: "Copy SSE address", command: 'vscode-debug-mcp.copySseAddress' }
             ];
 
             const selected = await vscode.window.showQuickPick(commands, {
-                placeHolder: 'Select a Claude Debugs For You command'
+                placeHolder: 'Select a VSCode Debug MCP command'
             });
 
             if (selected) {
                 vscode.commands.executeCommand(selected.command);
             }
         }),
-        vscode.commands.registerCommand('vscode-mcp-debug.restart', async () => {
+        vscode.commands.registerCommand('vscode-debug-mcp.restart', async () => {
             try {
                 await server.stop();
                 await startServer();
@@ -205,7 +205,7 @@ export function activate(context: vscode.ExtensionContext) {
                 await startServer();
             }
         }),
-        vscode.commands.registerCommand('vscode-mcp-debug.stop', () => {
+        vscode.commands.registerCommand('vscode-debug-mcp.stop', () => {
             server.stop()
                 .then(() => {
                     vscode.window.showInformationMessage('MCP Debug Server stopped');
@@ -214,18 +214,18 @@ export function activate(context: vscode.ExtensionContext) {
                     vscode.window.showErrorMessage(`Failed to stop debug server: ${err.message}`);
                 });
         }),
-        vscode.commands.registerCommand('vscode-mcp-debug.copyStdioPath', async () => {
+        vscode.commands.registerCommand('vscode-debug-mcp.copyStdioPath', async () => {
             await vscode.env.clipboard.writeText(mcpServerPath);
             vscode.window.showInformationMessage(`MCP stdio server path copied to clipboard.`);
         }),
-        vscode.commands.registerCommand('vscode-mcp-debug.copySseAddress', async () => {
+        vscode.commands.registerCommand('vscode-debug-mcp.copySseAddress', async () => {
             // Always get the latest port from config
             const updatedConfig = vscode.workspace.getConfiguration('mcpDebug');
             const currentPort = updatedConfig.get<number>('port') ?? 4711;
             await vscode.env.clipboard.writeText(`http://localhost:${currentPort}/sse`);
             vscode.window.showInformationMessage(`MCP sse server address copied to clipboard.`);
         }),
-        vscode.commands.registerCommand('vscode-mcp-debug.setPort', async () => {
+        vscode.commands.registerCommand('vscode-debug-mcp.setPort', async () => {
             // Always get the latest configuration
             const updatedConfig = vscode.workspace.getConfiguration('mcpDebug');
             const currentPort = updatedConfig.get<number>('port') ?? 4711;
@@ -264,12 +264,12 @@ export function activate(context: vscode.ExtensionContext) {
                     );
 
                     if (restart === 'Yes') {
-                        vscode.commands.executeCommand('vscode-mcp-debug.restart');
+                        vscode.commands.executeCommand('vscode-debug-mcp.restart');
                     }
                 }
             }
         }),
-        vscode.commands.registerCommand('vscode-mcp-debug.toggleAutostart', async () => {
+        vscode.commands.registerCommand('vscode-debug-mcp.toggleAutostart', async () => {
             const updatedConfig = vscode.workspace.getConfiguration('mcpDebug');
             const currentAutostart = updatedConfig.get<boolean>('autostart') ?? true;
             await updatedConfig.update('autostart', !currentAutostart, vscode.ConfigurationTarget.Global);

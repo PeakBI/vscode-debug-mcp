@@ -14,12 +14,12 @@ function getPortFromConfig(): number {
         const homeDir = os.homedir();
         
         if (process.platform === 'darwin') {
-            storagePath = path.join(homeDir, 'Library', 'Application Support', 'Code', 'User', 'globalStorage', 'jasonmcghee.claude-debugs-for-you');
+            storagePath = path.join(homeDir, 'Library', 'Application Support', 'Code', 'User', 'globalStorage', 'peakbi.vscode-debug-mcp');
         } else if (process.platform === 'win32') {
-            storagePath = path.join(homeDir, 'AppData', 'Roaming', 'Code', 'User', 'globalStorage', 'jasonmcghee.claude-debugs-for-you');
+            storagePath = path.join(homeDir, 'AppData', 'Roaming', 'Code', 'User', 'globalStorage', 'peakbi.vscode-debug-mcp');
         } else {
             // Linux and others
-            storagePath = path.join(homeDir, '.config', 'Code', 'User', 'globalStorage', 'jasonmcghee.claude-debugs-for-you');
+            storagePath = path.join(homeDir, '.config', 'Code', 'User', 'globalStorage', 'peakbi.vscode-debug-mcp');
         }
         
         const configPath = path.join(storagePath, 'port-config.json');

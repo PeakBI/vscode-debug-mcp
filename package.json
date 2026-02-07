@@ -1,12 +1,12 @@
 {
-  "name": "claude-debugs-for-you",
-  "displayName": "Claude Debugs for You",
-  "description": "Enable an MCP Client, such as Claude Desktop to directly debug code with breakpoints",
+  "name": "vscode-debug-mcp",
+  "displayName": "VSCode Debug MCP",
+  "description": "Enable an MCP Client to directly debug code with breakpoints, expression evaluation, and program launching",
   "version": "0.1.2",
-  "repository": "https://github.com/jasonjmcghee/claude-debugs-for-you",
+  "repository": "https://github.com/PeakBI/vscode-debug-mcp",
   "author": "Jason McGhee",
-  "publisher": "JasonMcGhee",
-  "icon": "images/claude-debugs-for-you.png",
+  "publisher": "PeakBI",
+  "icon": "images/vscode-debug-mcp.png",
   "engines": {
     "vscode": "^1.96.0"
   },
@@ -20,40 +20,40 @@
   "contributes": {
     "commands": [
       {
-        "command": "claude-debugs-for-you.showCommands",
-        "title": "Claude Debugs For You: Show All Commands"
+        "command": "vscode-debug-mcp.showCommands",
+        "title": "VSCode Debug MCP: Show All Commands"
       },
       {
-        "command": "vscode-mcp-debug.restart",
-        "title": "Claude Debugs For You: (Re)Start Server"
+        "command": "vscode-debug-mcp.restart",
+        "title": "VSCode Debug MCP: (Re)Start Server"
       },
       {
-        "command": "vscode-mcp-debug.stop",
-        "title": "Claude Debugs For You: Stop Server"
+        "command": "vscode-debug-mcp.stop",
+        "title": "VSCode Debug MCP: Stop Server"
       },
       {
-        "command": "vscode-mcp-debug.setPort",
-        "title": "Claude Debugs For You: Set Port"
+        "command": "vscode-debug-mcp.setPort",
+        "title": "VSCode Debug MCP: Set Port"
       },
       {
-        "command": "vscode-mcp-debug.toggleAutostart",
-        "title": "Claude Debugs For You: Toggle Autostart"
+        "command": "vscode-debug-mcp.toggleAutostart",
+        "title": "VSCode Debug MCP: Toggle Autostart"
       }
     ],
     "menus": {
       "commandPalette": [
         {
-          "command": "vscode-mcp-debug.setPort",
+          "command": "vscode-debug-mcp.setPort",
           "when": "false"
         },
         {
-          "command": "vscode-mcp-debug.toggleAutostart",
+          "command": "vscode-debug-mcp.toggleAutostart",
           "when": "false"
         }
       ]
     },
     "configuration": {
-      "title": "Claude Debugs For You",
+      "title": "VSCode Debug MCP",
       "properties": {
         "mcpDebug.port": {
           "type": "number",
@@ -68,7 +68,7 @@
         "mcpDebug.autostart": {
           "type": "boolean",
           "default": true,
-          "description": "Automatically start 'Claude Debugs For You' when opening VS Code"
+          "description": "Automatically start 'VSCode Debug MCP' when opening VS Code"
         }
       }
     }

@@ -20,16 +20,24 @@
   "contributes": {
     "commands": [
       {
-        "command": "vscode-debug-mcp.showCommands",
-        "title": "VSCode Debug MCP: Show All Commands"
-      },
-      {
         "command": "vscode-debug-mcp.restart",
-        "title": "VSCode Debug MCP: (Re)Start Server"
+        "title": "VSCode Debug MCP: (Re)Start Server",
+        "icon": "$(debug-start)"
       },
       {
         "command": "vscode-debug-mcp.stop",
-        "title": "VSCode Debug MCP: Stop Server"
+        "title": "VSCode Debug MCP: Stop Server",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "vscode-debug-mcp.copyStdioPath",
+        "title": "VSCode Debug MCP: Copy Stdio Path",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "vscode-debug-mcp.copySseAddress",
+        "title": "VSCode Debug MCP: Copy SSE Address",
+        "icon": "$(copy)"
       },
       {
         "command": "vscode-debug-mcp.setPort",
@@ -40,15 +48,35 @@
         "title": "VSCode Debug MCP: Toggle Autostart"
       }
     ],
-    "menus": {
-      "commandPalette": [
+    "views": {
+      "debug": [
         {
-          "command": "vscode-debug-mcp.setPort",
-          "when": "false"
+          "id": "mcpDebugView",
+          "name": "MCP Debug Server"
+        }
+      ]
+    },
+    "menus": {
+      "view/item/context": [
+        {
+          "command": "vscode-debug-mcp.restart",
+          "when": "view == mcpDebugView && viewItem == serverStopped",
+          "group": "inline"
         },
         {
-          "command": "vscode-debug-mcp.toggleAutostart",
-          "when": "false"
+          "command": "vscode-debug-mcp.stop",
+          "when": "view == mcpDebugView && viewItem == serverRunning",
+          "group": "inline"
+        },
+        {
+          "command": "vscode-debug-mcp.copyStdioPath",
+          "when": "view == mcpDebugView && viewItem == stdioPath",
+          "group": "inline"
+        },
+        {
+          "command": "vscode-debug-mcp.copySseAddress",
+          "when": "view == mcpDebugView && viewItem == sseAddress",
+          "group": "inline"
         }
       ]
     },

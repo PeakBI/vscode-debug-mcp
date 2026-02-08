@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { DebugServer } from './debug-server';
+import { DebugTreeDataProvider } from './debug-tree-provider';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -32,25 +33,13 @@ export function activate(context: vscode.ExtensionContext) {
 
     const server = new DebugServer(port, portConfigPath);
 
-    // Create status bar item
-    const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right);
-    statusBarItem.command = 'vscode-debug-mcp.showCommands';
-
-    // Update status bar with server state
-    function updateStatusBar() {
-        if (server.isRunning) {
-            statusBarItem.text = "$(check) VSCode Debug MCP";
-            statusBarItem.tooltip = "VSCode Debug MCP (Running) - Click to show commands";
-        } else {
-            statusBarItem.text = "$(x) VSCode Debug MCP";
-            statusBarItem.tooltip = "VSCode Debug MCP (Stopped) - Click to show commands";
-        }
-        statusBarItem.show();
-    }
+    // Create tree view provider for the debug panel
+    const treeProvider = new DebugTreeDataProvider(server, port, mcpServerPath);
+    const treeView = vscode.window.registerTreeDataProvider('mcpDebugView', treeProvider);
 
     // Listen for server state changes
-    server.on('started', updateStatusBar);
-    server.on('stopped', updateStatusBar);
+    server.on('started', () => treeProvider.refresh());
+    server.on('stopped', () => treeProvider.refresh());
 
     // Listen for configuration changes
     context.subscriptions.push(
@@ -70,6 +59,7 @@ export function activate(context: vscode.ExtensionContext) {
 
                 // Update server's port setting
                 server.setPort(newPort);
+                treeProvider.setPort(newPort);
 
                 if (server.isRunning) {
                     // Port changed, restart server with new port
@@ -77,13 +67,10 @@ export function activate(context: vscode.ExtensionContext) {
                     await vscode.commands.executeCommand('vscode-debug-mcp.restart');
                 }
             } else if (e.affectsConfiguration('mcpDebug')) {
-                updateStatusBar();
+                treeProvider.refresh();
             }
         })
     );
-
-    // Initial state
-    updateStatusBar();
 
     async function startServer() {
         // Always get the current port from config
@@ -173,29 +160,7 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     context.subscriptions.push(
-        statusBarItem,
-        vscode.commands.registerCommand('vscode-debug-mcp.showCommands', async () => {
-            const updatedConfig = vscode.workspace.getConfiguration('mcpDebug');
-            const currentPort = updatedConfig.get<number>('port') ?? 4711;
-            const commands = [
-                // Show either Start or Stop based on server state
-                server.isRunning
-                    ? { label: "Stop Server", command: 'vscode-debug-mcp.stop' }
-                    : { label: "Start Server", command: 'vscode-debug-mcp.restart' },
-                { label: `Set Port (currently: ${currentPort})`, command: 'vscode-debug-mcp.setPort' },
-                { label: `${updatedConfig.get<boolean>('autostart') ? 'Disable' : 'Enable'} Autostart`, command: 'vscode-debug-mcp.toggleAutostart' },
-                { label: "Copy stdio path", command: 'vscode-debug-mcp.copyStdioPath' },
-                { label: "Copy SSE address", command: 'vscode-debug-mcp.copySseAddress' }
-            ];
-
-            const selected = await vscode.window.showQuickPick(commands, {
-                placeHolder: 'Select a VSCode Debug MCP command'
-            });
-
-            if (selected) {
-                vscode.commands.executeCommand(selected.command);
-            }
-        }),
+        treeView,
         vscode.commands.registerCommand('vscode-debug-mcp.restart', async () => {
             try {
                 await server.stop();
@@ -256,6 +221,7 @@ export function activate(context: vscode.ExtensionContext) {
 
                 // Update server's port setting directly
                 server.setPort(portNum);
+                treeProvider.setPort(portNum);
 
                 if (server.isRunning) {
                     const restart = await vscode.window.showInformationMessage(
@@ -274,6 +240,7 @@ export function activate(context: vscode.ExtensionContext) {
             const currentAutostart = updatedConfig.get<boolean>('autostart') ?? true;
             await updatedConfig.update('autostart', !currentAutostart, vscode.ConfigurationTarget.Global);
             vscode.window.showInformationMessage(`Autostart ${!currentAutostart ? 'enabled' : 'disabled'}`);
+            treeProvider.refresh();
         }),
     );
 }

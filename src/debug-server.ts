@@ -67,7 +67,7 @@ const inspectInputSchema = {
 };
 
 // JSON Schema versions for the /tcp endpoint (used by stdio bridge)
-const tools = [
+export const tools = [
     {
         name: "debug_execute",
         description: executeDescription,

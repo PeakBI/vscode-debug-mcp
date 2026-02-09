@@ -12,7 +12,7 @@ function getPortFromConfig(): number {
         // Determine the global storage path based on platform
         let storagePath: string;
         const homeDir = os.homedir();
-        
+
         if (process.platform === 'darwin') {
             storagePath = path.join(homeDir, 'Library', 'Application Support', 'Code', 'User', 'globalStorage', 'peakbi.vscode-debug-mcp');
         } else if (process.platform === 'win32') {
@@ -21,9 +21,9 @@ function getPortFromConfig(): number {
             // Linux and others
             storagePath = path.join(homeDir, '.config', 'Code', 'User', 'globalStorage', 'peakbi.vscode-debug-mcp');
         }
-        
+
         const configPath = path.join(storagePath, 'port-config.json');
-        
+
         if (fs.existsSync(configPath)) {
             const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
             if (config && typeof config.port === 'number') {
@@ -33,16 +33,16 @@ function getPortFromConfig(): number {
     } catch (error) {
         console.error('Error reading port config:', error);
     }
-    
+
     return 4711; // Default port
 }
 
 async function makeRequest(payload: any): Promise<any> {
     const port = getPortFromConfig();
-    
+
     return new Promise((resolve, reject) => {
         const data = JSON.stringify(payload);
-        
+
         const req = http.request({
             hostname: 'localhost',
             port,
@@ -87,95 +87,60 @@ const server = new Server(
     }
 );
 
+const executeDescription = `Control program execution during debugging. Use 'launch' to start a debug session (set breakpoints FIRST). Use 'continue' to run to the next breakpoint. Use 'stepOver' to execute the current line, 'stepIn' to enter a function call, 'stepOut' to finish the current function. Use 'stop' to end the debug session. After launch/continue/step actions, returns the stopped location and stack trace.`;
 
-const debugDescription = `Execute a debug plan with breakpoints, launch, continues, and expression 
-evaluation. ONLY SET BREAKPOINTS BEFORE LAUNCHING OR WHILE PAUSED. Be careful to keep track of where 
-you are, if paused on a breakpoint. Make sure to find and get the contents of any requested files. 
-Only use continue when ready to move to the next breakpoint. Launch will bring you to the first 
-breakpoint. DO NOT USE CONTINUE TO GET TO THE FIRST BREAKPOINT.`;
+const breakpointsDescription = `Manage breakpoints. Use 'set' to add a breakpoint at a file and line (absolute path required). Use 'remove' to delete a breakpoint at a specific file and line. Use 'list' to see all current breakpoints. Set breakpoints BEFORE launching the debug session or while paused.`;
 
-const listFilesDescription = "List all files in the workspace. Use this to find any requested files.";
+const inspectDescription = `Inspect program state while paused at a breakpoint. Use 'evaluate' to evaluate an expression in the current stack frame (e.g. inspect variables, check conditions). Use 'stackTrace' to see the full call chain that led to the current location. The program must be paused.`;
 
-const getFileContentDescription = `Get file content with line numbers - you likely need to list files 
-to understand what files are available. Be careful to use absolute paths.`;
-
-// Zod schemas for the tools
-const listFilesInputSchema = {
-    type: "object",
-    properties: {
-        includePatterns: {
-            type: "array",
-            items: { type: "string" },
-            description: "Glob patterns to include (e.g. ['**/*.js'])"
-        },
-        excludePatterns: {
-            type: "array",
-            items: { type: "string" },
-            description: "Glob patterns to exclude (e.g. ['node_modules/**'])"
-        }
-    }
-};
-
-const getFileContentInputSchema = {
-    type: "object",
-    properties: {
-        path: {
-            type: "string",
-            description: "Path to the file. IT MUST BE AN ABSOLUTE PATH AND MATCH THE OUTPUT OF listFiles"
-        }
-    },
-    required: ["path"]
-};
-
-const debugStepSchema = {
-    type: "array",
-    items: {
-        type: "object",
-        properties: {
-            type: {
-                type: "string",
-                enum: ["setBreakpoint", "removeBreakpoint", "continue", "evaluate", "launch"],
-                description: ""
-            },
-            file: { type: "string" },
-            line: { type: "number" },
-            expression: {
-                description: "An expression to be evaluated in the stack frame of the current breakpoint",
-                type: "string"
-            },
-            condition: {
-                description: "If needed, a breakpoint condition may be specified to only stop on a breakpoint for some given condition.",
-                type: "string"
-            },
-        },
-        required: ["type", "file"]
-    }
-};
-
-const debugInputSchema = {
-    type: "object",
-    properties: {
-        steps: debugStepSchema
-    },
-    required: ["steps"]
-};
-
-// Main tools array with Zod schemas
 const tools = [
     {
-        name: "listFiles",
-        description: listFilesDescription, // Make sure this variable is defined in your code
-        inputSchema: listFilesInputSchema,
+        name: "debug_execute",
+        description: executeDescription,
+        inputSchema: {
+            type: "object",
+            properties: {
+                action: { type: "string", enum: ["launch", "stop", "continue", "stepOver", "stepIn", "stepOut"], description: "The execution action to perform" },
+                configurationName: { type: "string", description: "Name of the launch configuration to use (only for launch)" },
+                noDebug: { type: "boolean", description: "If true, launch without debugging (only for launch)" },
+                threadId: { type: "number", description: "Thread ID to operate on (for continue/step*)" },
+                granularity: { type: "string", enum: ["statement", "line", "instruction"], description: "Stepping granularity (for step* actions)" },
+            },
+            required: ["action"],
+        },
     },
     {
-        name: "getFileContent",
-        description: getFileContentDescription, // Make sure this variable is defined in your code
-        inputSchema: getFileContentInputSchema,
+        name: "debug_breakpoints",
+        description: breakpointsDescription,
+        inputSchema: {
+            type: "object",
+            properties: {
+                action: { type: "string", enum: ["set", "remove", "list"], description: "The breakpoint action to perform" },
+                file: { type: "string", description: "Absolute path to the file (required for set/remove)" },
+                line: { type: "number", description: "Line number for the breakpoint (required for set/remove)" },
+                condition: { type: "string", description: "Breakpoint condition expression (only for set)" },
+                hitCondition: { type: "string", description: "Hit count condition (only for set)" },
+                logMessage: { type: "string", description: "Log message instead of breaking (only for set)" },
+            },
+            required: ["action"],
+        },
     },
     {
-        name: "debug",
-        description: debugDescription, // Make sure this variable is defined in your code
-        inputSchema: debugInputSchema,
+        name: "debug_inspect",
+        description: inspectDescription,
+        inputSchema: {
+            type: "object",
+            properties: {
+                action: { type: "string", enum: ["evaluate", "stackTrace"], description: "The inspection action to perform" },
+                expression: { type: "string", description: "Expression to evaluate (required for evaluate)" },
+                frameId: { type: "number", description: "Stack frame ID for evaluation context (for evaluate)" },
+                context: { type: "string", enum: ["watch", "repl", "hover", "clipboard"], description: "Evaluation context (for evaluate)" },
+                threadId: { type: "number", description: "Thread ID (for stackTrace)" },
+                startFrame: { type: "number", description: "First frame to return (for stackTrace)" },
+                levels: { type: "number", description: "Maximum number of frames to return (for stackTrace)" },
+            },
+            required: ["action"],
+        },
     },
 ];
 
@@ -193,7 +158,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     return {
         content: [{
             type: "text",
-            text: Array.isArray(response) ? response.join("\n") : response
+            text: typeof response === 'string' ? response : JSON.stringify(response)
         }]
     };
 });
@@ -236,4 +201,3 @@ const INITIAL_DELAY = 500;
         await sleep(TIMEOUT);
     }
 })();
-

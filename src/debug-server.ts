@@ -14,16 +14,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 
 export interface DebugCommand {
-    command: 'listFiles' | 'getFileContent' | 'debug';
+    command: 'debug_execute' | 'debug_breakpoints' | 'debug_inspect';
     payload: any;
-}
-
-export interface DebugStep {
-    type: 'setBreakpoint' | 'removeBreakpoint' | 'continue' | 'evaluate' | 'launch';
-    file: string;
-    line?: number;
-    expression?: string;
-    condition?: string;
 }
 
 interface ToolRequest {
@@ -32,57 +24,100 @@ interface ToolRequest {
     arguments?: any;
 }
 
-const debugDescription = `Execute a debug plan with breakpoints, launch, continues, and expression 
-evaluation. ONLY SET BREAKPOINTS BEFORE LAUNCHING OR WHILE PAUSED. Be careful to keep track of where 
-you are, if paused on a breakpoint. Make sure to find and get the contents of any requested files. 
-Only use continue when ready to move to the next breakpoint. Launch will bring you to the first 
-breakpoint. DO NOT USE CONTINUE TO GET TO THE FIRST BREAKPOINT.`;
+interface StoppedState {
+    file: string;
+    line: number;
+    column: number;
+    stackTrace: Array<{ id: number; name: string; file: string; line: number; column: number }>;
+}
 
-const listFilesDescription = "List all files in the workspace. Use this to find any requested files.";
+// Tool descriptions
+const executeDescription = `Control program execution during debugging. Use 'launch' to start a debug session (set breakpoints FIRST). Use 'continue' to run to the next breakpoint. Use 'stepOver' to execute the current line, 'stepIn' to enter a function call, 'stepOut' to finish the current function. Use 'stop' to end the debug session. After launch/continue/step actions, returns the stopped location and stack trace.`;
 
-const getFileContentDescription = `Get file content with line numbers - you likely need to list files 
-to understand what files are available. Be careful to use absolute paths.`;
+const breakpointsDescription = `Manage breakpoints. Use 'set' to add a breakpoint at a file and line (absolute path required). Use 'remove' to delete a breakpoint at a specific file and line. Use 'list' to see all current breakpoints. Set breakpoints BEFORE launching the debug session or while paused.`;
 
-// Zod schemas for the tools
-const listFilesInputSchema = {
-    includePatterns: z.array(z.string()).describe("Glob patterns to include (e.g. ['**/*.js'])").optional(),
-    excludePatterns: z.array(z.string()).describe("Glob patterns to exclude (e.g. ['node_modules/**'])").optional(),
+const inspectDescription = `Inspect program state while paused at a breakpoint. Use 'evaluate' to evaluate an expression in the current stack frame (e.g. inspect variables, check conditions). Use 'stackTrace' to see the full call chain that led to the current location. The program must be paused.`;
+
+// Zod schemas for the 3 tools
+const executeInputSchema = {
+    action: z.enum(["launch", "stop", "continue", "stepOver", "stepIn", "stepOut"]).describe("The execution action to perform"),
+    configurationName: z.string().optional().describe("Name of the launch configuration to use (only for launch). If omitted and multiple configs exist, returns the available names."),
+    noDebug: z.boolean().optional().describe("If true, launch without debugging (only for launch)"),
+    threadId: z.number().optional().describe("Thread ID to operate on (for continue/step*). If omitted, uses the active thread."),
+    granularity: z.enum(["statement", "line", "instruction"]).optional().describe("Stepping granularity (for step* actions)"),
 };
 
-const getFileContentInputSchema = {
-    path: z.string().describe("Path to the file. IT MUST BE AN ABSOLUTE PATH AND MATCH THE OUTPUT OF listFiles"),
+const breakpointsInputSchema = {
+    action: z.enum(["set", "remove", "list"]).describe("The breakpoint action to perform"),
+    file: z.string().optional().describe("Absolute path to the file (required for set/remove)"),
+    line: z.number().optional().describe("Line number for the breakpoint (required for set/remove)"),
+    condition: z.string().optional().describe("Breakpoint condition expression (only for set)"),
+    hitCondition: z.string().optional().describe("Hit count condition (only for set)"),
+    logMessage: z.string().optional().describe("Log message instead of breaking (only for set)"),
 };
 
-const debugStepSchema = z.object({
-    type: z.enum(["setBreakpoint", "removeBreakpoint", "continue", "evaluate", "launch"]).describe(""),
-    file: z.string(),
-    line: z.number().optional(),
-    expression: z.string().describe("An expression to be evaluated in the stack frame of the current breakpoint").optional(),
-    condition: z.string().describe("If needed, a breakpoint condition may be specified to only stop on a breakpoint for some given condition.").optional(),
-});
-
-const debugInputSchema = {
-    steps: z.array(debugStepSchema),
+const inspectInputSchema = {
+    action: z.enum(["evaluate", "stackTrace"]).describe("The inspection action to perform"),
+    expression: z.string().optional().describe("Expression to evaluate (required for evaluate)"),
+    frameId: z.number().optional().describe("Stack frame ID for evaluation context (for evaluate)"),
+    context: z.enum(["watch", "repl", "hover", "clipboard"]).optional().describe("Evaluation context (for evaluate)"),
+    threadId: z.number().optional().describe("Thread ID (for stackTrace). If omitted, uses the active thread."),
+    startFrame: z.number().optional().describe("First frame to return (for stackTrace)"),
+    levels: z.number().optional().describe("Maximum number of frames to return (for stackTrace)"),
 };
 
-// Main tools array with Zod schemas
+// JSON Schema versions for the /tcp endpoint (used by stdio bridge)
 const tools = [
     {
-        name: "listFiles",
-        description: listFilesDescription, // Make sure this variable is defined in your code
-        inputSchema: listFilesInputSchema,
+        name: "debug_execute",
+        description: executeDescription,
+        inputSchema: {
+            type: "object",
+            properties: {
+                action: { type: "string", enum: ["launch", "stop", "continue", "stepOver", "stepIn", "stepOut"], description: "The execution action to perform" },
+                configurationName: { type: "string", description: "Name of the launch configuration to use (only for launch)" },
+                noDebug: { type: "boolean", description: "If true, launch without debugging (only for launch)" },
+                threadId: { type: "number", description: "Thread ID to operate on (for continue/step*)" },
+                granularity: { type: "string", enum: ["statement", "line", "instruction"], description: "Stepping granularity (for step* actions)" },
+            },
+            required: ["action"],
+        },
     },
     {
-        name: "getFileContent",
-        description: getFileContentDescription, // Make sure this variable is defined in your code
-        inputSchema: getFileContentInputSchema,
+        name: "debug_breakpoints",
+        description: breakpointsDescription,
+        inputSchema: {
+            type: "object",
+            properties: {
+                action: { type: "string", enum: ["set", "remove", "list"], description: "The breakpoint action to perform" },
+                file: { type: "string", description: "Absolute path to the file (required for set/remove)" },
+                line: { type: "number", description: "Line number for the breakpoint (required for set/remove)" },
+                condition: { type: "string", description: "Breakpoint condition expression (only for set)" },
+                hitCondition: { type: "string", description: "Hit count condition (only for set)" },
+                logMessage: { type: "string", description: "Log message instead of breaking (only for set)" },
+            },
+            required: ["action"],
+        },
     },
     {
-        name: "debug",
-        description: debugDescription, // Make sure this variable is defined in your code
-        inputSchema: debugInputSchema,
+        name: "debug_inspect",
+        description: inspectDescription,
+        inputSchema: {
+            type: "object",
+            properties: {
+                action: { type: "string", enum: ["evaluate", "stackTrace"], description: "The inspection action to perform" },
+                expression: { type: "string", description: "Expression to evaluate (required for evaluate)" },
+                frameId: { type: "number", description: "Stack frame ID for evaluation context (for evaluate)" },
+                context: { type: "string", enum: ["watch", "repl", "hover", "clipboard"], description: "Evaluation context (for evaluate)" },
+                threadId: { type: "number", description: "Thread ID (for stackTrace)" },
+                startFrame: { type: "number", description: "First frame to return (for stackTrace)" },
+                levels: { type: "number", description: "Maximum number of frames to return (for stackTrace)" },
+            },
+            required: ["action"],
+        },
     },
 ];
+
 export class DebugServer extends EventEmitter implements DebugServerEvents {
     private server: net.Server | null = null;
     private port: number = 4711;
@@ -100,20 +135,20 @@ export class DebugServer extends EventEmitter implements DebugServerEvents {
             version: "1.0.0",
         });
 
-        // Setup MCP tools to use our existing handlers
-        this.mcpServer.tool("listFiles", listFilesDescription, listFilesInputSchema, async (args: any) => {
-            const files = await this.handleListFiles(args);
-            return { content: [{ type: "text", text: JSON.stringify(files) }] };
+        // Register the 3 new MCP tools
+        this.mcpServer.tool("debug_execute", executeDescription, executeInputSchema, async (args: any) => {
+            const result = await this.handleExecute(args);
+            return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
         });
 
-        this.mcpServer.tool("getFileContent", getFileContentDescription, getFileContentInputSchema, async (args: any) => {
-            const content = await this.handleGetFile(args);
-            return { content: [{ type: "text", text: content }] };
+        this.mcpServer.tool("debug_breakpoints", breakpointsDescription, breakpointsInputSchema, async (args: any) => {
+            const result = await this.handleBreakpoints(args);
+            return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
         });
 
-        this.mcpServer.tool("debug", debugDescription, debugInputSchema, async (args: any) => {
-            const results = await this.handleDebug(args);
-            return { content: [{ type: "text", text: results.join('\n') }] };
+        this.mcpServer.tool("debug_inspect", inspectDescription, inspectInputSchema, async (args: any) => {
+            const result = await this.handleInspect(args);
+            return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
         });
     }
 
@@ -124,14 +159,12 @@ export class DebugServer extends EventEmitter implements DebugServerEvents {
     setPort(port: number): void {
         this.port = port || 4711;
 
-        // Update port in configuration file if available
         if (this.portConfigPath && typeof port === 'number') {
             try {
                 const fs = require('fs');
                 fs.writeFileSync(this.portConfigPath, JSON.stringify({ port }));
             } catch (err) {
                 console.error('Failed to update port configuration file:', err);
-                // We'll still use the new port even if saving to file fails
             }
         }
     }
@@ -142,20 +175,18 @@ export class DebugServer extends EventEmitter implements DebugServerEvents {
 
     async forceStopExistingServer(): Promise<void> {
         try {
-            // Send a request to the shutdown endpoint of any existing server
             await new Promise<void>((resolve, reject) => {
                 const req = http.request({
                     hostname: 'localhost',
                     port: this.port,
                     path: '/shutdown',
                     method: 'POST',
-                    timeout: 3000 // 3 second timeout
+                    timeout: 3000
                 }, (res) => {
                     let data = '';
                     res.on('data', chunk => data += chunk);
                     res.on('end', () => {
                         if (res.statusCode === 200) {
-                            // Give the server a moment to shut down
                             setTimeout(resolve, 500);
                         } else {
                             reject(new Error(`Unexpected status: ${res.statusCode}`));
@@ -164,9 +195,8 @@ export class DebugServer extends EventEmitter implements DebugServerEvents {
                 });
 
                 req.on('error', (err: NodeJS.ErrnoException) => {
-                    // If we can't connect, there's no server running or it's not ours
                     if (err.code === 'ECONNREFUSED') {
-                        resolve(); // No server running, so nothing to stop
+                        resolve();
                     } else {
                         reject(err);
                     }
@@ -191,7 +221,6 @@ export class DebugServer extends EventEmitter implements DebugServerEvents {
         }
 
         this.server = http.createServer(async (req, res) => {
-            // Handle CORS
             res.setHeader('Access-Control-Allow-Origin', '*');
             res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
             res.setHeader('Access-Control-Allow-Headers', '*');
@@ -201,16 +230,15 @@ export class DebugServer extends EventEmitter implements DebugServerEvents {
                 return;
             }
 
-            // Shutdown endpoint - allows another instance to request shutdown of this server
             if (req.method === 'POST' && req.url === '/shutdown') {
                 res.writeHead(200).end('Server shutting down');
                 this.stop().catch(err => {
-                    res.writeHead(500).end(`Error shutting down: ${err.message}`);
+                    console.error('Error shutting down:', err);
                 });
                 return;
             }
 
-            // Legacy TCP-style endpoint
+            // Legacy TCP-style endpoint (used by stdio bridge)
             if (req.method === 'POST' && req.url === '/tcp') {
                 let body = '';
                 req.on('data', chunk => body += chunk);
@@ -273,266 +301,478 @@ export class DebugServer extends EventEmitter implements DebugServerEvents {
         });
     }
 
-    // Helper method to handle tool calls
-    private async handleCommand(request: ToolRequest): Promise<any> {
-        switch (request.tool) {
-            case 'listFiles':
-                return await this.handleListFiles(request.arguments);
-            case 'getFileContent':
-                return await this.handleGetFile(request.arguments);
-            case 'debug':
-                return await this.handleDebug(request.arguments);
+    // --- Shared helpers ---
+
+    private async resolveThreadId(session: vscode.DebugSession, explicitThreadId?: number): Promise<number> {
+        if (explicitThreadId !== undefined) {
+            return explicitThreadId;
+        }
+
+        // Try to get thread from activeStackItem
+        const activeStackItem = vscode.debug.activeStackItem;
+        if (activeStackItem instanceof vscode.DebugThread) {
+            return activeStackItem.threadId;
+        }
+        if (activeStackItem instanceof vscode.DebugStackFrame) {
+            return activeStackItem.threadId;
+        }
+
+        // Fall back to DAP threads request
+        const threadsResponse = await session.customRequest('threads');
+        if (threadsResponse?.threads?.length > 0) {
+            return threadsResponse.threads[0].id;
+        }
+
+        throw new Error('No threads available');
+    }
+
+    private async gatherStoppedState(session: vscode.DebugSession, threadId: number): Promise<StoppedState> {
+        const stackResponse = await session.customRequest('stackTrace', {
+            threadId,
+            startFrame: 0,
+            levels: 20,
+        });
+
+        const frames = stackResponse.stackFrames || [];
+        if (frames.length === 0) {
+            throw new Error('No stack frames available');
+        }
+
+        const topFrame = frames[0];
+        return {
+            file: topFrame.source?.path || topFrame.source?.name || '<unknown>',
+            line: topFrame.line,
+            column: topFrame.column,
+            stackTrace: frames.map((f: any) => ({
+                id: f.id,
+                name: f.name,
+                file: f.source?.path || f.source?.name || '<unknown>',
+                line: f.line,
+                column: f.column,
+            })),
+        };
+    }
+
+    private async executeAndWaitForStop(
+        session: vscode.DebugSession,
+        dapCommand: string,
+        dapArgs: any
+    ): Promise<{ stopped: true; state: StoppedState } | { stopped: false; reason: string }> {
+        return new Promise(async (resolve) => {
+            let resolved = false;
+
+            const cleanup = () => {
+                stackDisposable.dispose();
+                terminateDisposable.dispose();
+                clearTimeout(timer);
+            };
+
+            const stackDisposable = vscode.debug.onDidChangeActiveStackItem(async (item) => {
+                if (resolved) { return; }
+                // When we stop at a breakpoint or step, activeStackItem changes
+                if (item instanceof vscode.DebugStackFrame || item instanceof vscode.DebugThread) {
+                    resolved = true;
+                    cleanup();
+                    try {
+                        const threadId = item instanceof vscode.DebugStackFrame ? item.threadId : item.threadId;
+                        const state = await this.gatherStoppedState(session, threadId);
+                        resolve({ stopped: true, state });
+                    } catch (err) {
+                        resolve({ stopped: false, reason: `Stopped but failed to get state: ${err instanceof Error ? err.message : String(err)}` });
+                    }
+                }
+            });
+
+            const terminateDisposable = vscode.debug.onDidTerminateDebugSession((terminatedSession) => {
+                if (resolved) { return; }
+                if (terminatedSession === session) {
+                    resolved = true;
+                    cleanup();
+                    resolve({ stopped: false, reason: 'Debug session terminated' });
+                }
+            });
+
+            const timer = setTimeout(() => {
+                if (resolved) { return; }
+                resolved = true;
+                cleanup();
+                resolve({ stopped: false, reason: 'Timed out waiting for program to stop (10s)' });
+            }, 10000);
+
+            try {
+                await session.customRequest(dapCommand, dapArgs);
+            } catch (err) {
+                if (!resolved) {
+                    resolved = true;
+                    cleanup();
+                    resolve({ stopped: false, reason: `DAP request '${dapCommand}' failed: ${err instanceof Error ? err.message : String(err)}` });
+                }
+            }
+        });
+    }
+
+    private async waitForLaunchResult(
+        workspaceFolder: vscode.WorkspaceFolder,
+        config: any
+    ): Promise<any> {
+        return new Promise(async (resolve) => {
+            let resolved = false;
+
+            const cleanup = () => {
+                stackDisposable.dispose();
+                terminateDisposable.dispose();
+                clearTimeout(timer);
+            };
+
+            // Listen for stop events (breakpoint hit, etc.)
+            const stackDisposable = vscode.debug.onDidChangeActiveStackItem(async (item) => {
+                if (resolved) { return; }
+                if (item instanceof vscode.DebugStackFrame || item instanceof vscode.DebugThread) {
+                    resolved = true;
+                    cleanup();
+                    try {
+                        const session = vscode.debug.activeDebugSession;
+                        if (!session) {
+                            resolve({ message: 'Debug session started but no active session found' });
+                            return;
+                        }
+                        const threadId = item instanceof vscode.DebugStackFrame ? item.threadId : item.threadId;
+                        const state = await this.gatherStoppedState(session, threadId);
+                        resolve({
+                            message: `Debug session started - stopped at ${state.file}:${state.line}`,
+                            ...state,
+                        });
+                    } catch (err) {
+                        resolve({ message: `Debug session started - stopped but failed to get state: ${err instanceof Error ? err.message : String(err)}` });
+                    }
+                }
+            });
+
+            // Listen for session termination
+            const terminateDisposable = vscode.debug.onDidTerminateDebugSession(() => {
+                if (resolved) { return; }
+                resolved = true;
+                cleanup();
+                resolve({ message: 'Debug session terminated' });
+            });
+
+            // Timeout after 10 seconds — program might be running without hitting a breakpoint
+            const timer = setTimeout(() => {
+                if (resolved) { return; }
+                resolved = true;
+                cleanup();
+                resolve({ message: 'Debug session started (program is running)' });
+            }, 10000);
+
+            // Start the debug session
+            try {
+                await vscode.debug.startDebugging(workspaceFolder, config);
+            } catch (err) {
+                if (!resolved) {
+                    resolved = true;
+                    cleanup();
+                    resolve({ message: `Failed to start debug session: ${err instanceof Error ? err.message : String(err)}` });
+                }
+            }
+        });
+    }
+
+    // --- Tool handlers ---
+
+    private async handleExecute(args: {
+        action: string;
+        configurationName?: string;
+        noDebug?: boolean;
+        threadId?: number;
+        granularity?: string;
+    }): Promise<any> {
+        switch (args.action) {
+            case 'launch': {
+                const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+                if (!workspaceFolder) {
+                    throw new Error('No workspace folder found');
+                }
+
+                const launchConfig = vscode.workspace.getConfiguration('launch', workspaceFolder.uri);
+                const configurations = launchConfig.get<any[]>('configurations');
+
+                if (!configurations || configurations.length === 0) {
+                    throw new Error('No debug configurations found in launch.json');
+                }
+
+                let config: any;
+                if (args.configurationName) {
+                    config = configurations.find(c => c.name === args.configurationName);
+                    if (!config) {
+                        const names = configurations.map(c => c.name);
+                        throw new Error(`Configuration "${args.configurationName}" not found. Available: ${names.join(', ')}`);
+                    }
+                    config = { ...config };
+                } else if (configurations.length === 1) {
+                    config = { ...configurations[0] };
+                } else {
+                    const names = configurations.map(c => c.name);
+                    return {
+                        message: 'Multiple debug configurations available. Specify configurationName.',
+                        configurations: names,
+                    };
+                }
+
+                // Replace ${workspaceFolder} in config values
+                const replacePlaceholders = (obj: any): any => {
+                    if (typeof obj === 'string') {
+                        return obj.replace(/\$\{workspaceFolder\}/g, workspaceFolder.uri.fsPath);
+                    }
+                    if (Array.isArray(obj)) {
+                        return obj.map(replacePlaceholders);
+                    }
+                    if (obj && typeof obj === 'object') {
+                        const result: any = {};
+                        for (const key of Object.keys(obj)) {
+                            result[key] = replacePlaceholders(obj[key]);
+                        }
+                        return result;
+                    }
+                    return obj;
+                };
+                config = replacePlaceholders(config);
+
+                if (args.noDebug) {
+                    config.noDebug = true;
+                }
+
+                // Check if we're already debugging
+                let session = vscode.debug.activeDebugSession;
+                if (session) {
+                    return { message: 'Debug session already active' };
+                }
+
+                // Wait for either a stop event (breakpoint hit) or session termination
+                return await this.waitForLaunchResult(workspaceFolder, config);
+            }
+
+            case 'stop': {
+                const session = vscode.debug.activeDebugSession;
+                if (!session) {
+                    return { message: 'No active debug session' };
+                }
+                await vscode.debug.stopDebugging(session);
+                return { message: 'Debug session stopped' };
+            }
+
+            case 'continue':
+            case 'stepOver':
+            case 'stepIn':
+            case 'stepOut': {
+                const session = vscode.debug.activeDebugSession;
+                if (!session) {
+                    throw new Error('No active debug session');
+                }
+
+                const threadId = await this.resolveThreadId(session, args.threadId);
+
+                const dapCommandMap: Record<string, string> = {
+                    'continue': 'continue',
+                    'stepOver': 'next',
+                    'stepIn': 'stepIn',
+                    'stepOut': 'stepOut',
+                };
+
+                const dapCommand = dapCommandMap[args.action];
+                const dapArgs: any = { threadId };
+                if (args.granularity && args.action !== 'continue') {
+                    dapArgs.granularity = args.granularity;
+                }
+
+                const result = await this.executeAndWaitForStop(session, dapCommand, dapArgs);
+                if (result.stopped) {
+                    return {
+                        message: `${args.action} completed - stopped at ${result.state.file}:${result.state.line}`,
+                        ...result.state,
+                    };
+                }
+                return { message: result.reason };
+            }
+
             default:
-                throw new Error(`Unknown tool: ${request.tool}`);
+                throw new Error(`Unknown execute action: ${args.action}`);
         }
     }
 
-    private async handleLaunch(payload: {
-        program: string,
-        args?: string[]
-    }): Promise<string> {
-        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        if (!workspaceFolder) {
-            throw new Error('No workspace folder found');
-        }
-
-        // Try to get launch configurations
-        const launchConfig = vscode.workspace.getConfiguration('launch', workspaceFolder.uri);
-        const configurations = launchConfig.get<any[]>('configurations');
-
-        if (!configurations || configurations.length === 0) {
-            throw new Error('No debug configurations found in launch.json');
-        }
-
-        // Get the first configuration and update it with the current file
-        const config = { ...configurations[0] };
-
-        // Replace ${file} with actual file path if it exists in the configuration
-        Object.keys(config).forEach(key => {
-            if (typeof config[key] === 'string') {
-                config[key] = config[key].replace('${file}', payload.program);
-            }
-        });
-
-        // Replace ${workspaceFolder} in environment variables if they exist
-        if (config.env) {
-            Object.keys(config.env).forEach(key => {
-                if (typeof config.env[key] === 'string') {
-                    config.env[key] = config.env[key].replace(
-                        '${workspaceFolder}',
-                        workspaceFolder.uri.fsPath
-                    );
+    private async handleBreakpoints(args: {
+        action: string;
+        file?: string;
+        line?: number;
+        condition?: string;
+        hitCondition?: string;
+        logMessage?: string;
+    }): Promise<any> {
+        switch (args.action) {
+            case 'set': {
+                if (!args.file) {
+                    throw new Error('file is required for set action');
                 }
-            });
-        }
+                if (!args.line) {
+                    throw new Error('line is required for set action');
+                }
 
-        // Check if we're already debugging
-        let session = vscode.debug.activeDebugSession;
-        if (!session) {
-            // Start debugging using the configured launch configuration
-            await vscode.debug.startDebugging(workspaceFolder, config);
+                const document = await vscode.workspace.openTextDocument(args.file);
+                const editor = await vscode.window.showTextDocument(document);
 
-            // Wait for session to be available
-            session = await this.waitForDebugSession();
-        }
+                const bp = new vscode.SourceBreakpoint(
+                    new vscode.Location(
+                        editor.document.uri,
+                        new vscode.Position(args.line - 1, 0)
+                    ),
+                    true,
+                    args.condition,
+                    args.hitCondition,
+                    args.logMessage,
+                );
+                vscode.debug.addBreakpoints([bp]);
+                return {
+                    message: `Breakpoint set at ${args.file}:${args.line}`,
+                    file: args.file,
+                    line: args.line,
+                    condition: args.condition,
+                    hitCondition: args.hitCondition,
+                    logMessage: args.logMessage,
+                };
+            }
 
-        // Check if we're at a breakpoint
-        try {
-            const threads = await session.customRequest('threads');
-            const threadId = threads?.threads?.[0]?.id;
+            case 'remove': {
+                if (!args.file) {
+                    throw new Error('file is required for remove action');
+                }
+                if (!args.line) {
+                    throw new Error('line is required for remove action');
+                }
 
-            const stack = await session.customRequest('stackTrace', { threadId });
-            if (stack.stackFrames && stack.stackFrames.length > 0) {
-                const topFrame = stack.stackFrames[0];
-                const currentBreakpoints = vscode.debug.breakpoints.filter(bp => {
+                const bps = vscode.debug.breakpoints.filter(bp => {
                     if (bp instanceof vscode.SourceBreakpoint) {
-                        return bp.location.uri.toString() === topFrame.source.path &&
-                            bp.location.range.start.line === (topFrame.line - 1);
+                        return bp.location.uri.fsPath === args.file &&
+                            bp.location.range.start.line === args.line! - 1;
                     }
                     return false;
                 });
 
-                if (currentBreakpoints.length > 0) {
-                    return `Debug session started - Stopped at breakpoint on line ${topFrame.line}`;
+                if (bps.length === 0) {
+                    return { message: `No breakpoint found at ${args.file}:${args.line}`, removed: 0 };
                 }
+
+                vscode.debug.removeBreakpoints(bps);
+                return { message: `Removed ${bps.length} breakpoint(s) at ${args.file}:${args.line}`, removed: bps.length };
             }
-            return 'Debug session started';
-        } catch (err) {
-            console.error('Error checking breakpoint status:', err);
-            return 'Debug session started';
+
+            case 'list': {
+                const breakpoints = vscode.debug.breakpoints
+                    .filter((bp): bp is vscode.SourceBreakpoint => bp instanceof vscode.SourceBreakpoint)
+                    .map(bp => ({
+                        file: bp.location.uri.fsPath,
+                        line: bp.location.range.start.line + 1,
+                        enabled: bp.enabled,
+                        condition: bp.condition,
+                        hitCondition: bp.hitCondition,
+                        logMessage: bp.logMessage,
+                    }));
+
+                return { breakpoints, count: breakpoints.length };
+            }
+
+            default:
+                throw new Error(`Unknown breakpoints action: ${args.action}`);
         }
     }
 
-    private waitForDebugSession(): Promise<vscode.DebugSession> {
-        return new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                reject(new Error('Timeout waiting for debug session'));
-            }, 5000);
-
-            const checkSession = () => {
-                const session = vscode.debug.activeDebugSession;
-                if (session) {
-                    clearTimeout(timeout);
-                    resolve(session);
-                } else {
-                    setTimeout(checkSession, 100);
-                }
-            };
-
-            checkSession();
-        });
-    }
-
-    private async handleListFiles(payload: {
-        includePatterns?: string[],
-        excludePatterns?: string[]
-    }): Promise<string[]> {
-        const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (!workspaceFolders) {
-            throw new Error('No workspace folders found');
+    private async handleInspect(args: {
+        action: string;
+        expression?: string;
+        frameId?: number;
+        context?: string;
+        threadId?: number;
+        startFrame?: number;
+        levels?: number;
+    }): Promise<any> {
+        const session = vscode.debug.activeDebugSession;
+        if (!session) {
+            throw new Error('No active debug session. The program must be paused.');
         }
 
-        const includePatterns = payload.includePatterns || ['**/*'];
-        const excludePatterns = payload.excludePatterns || ['**/node_modules/**', '**/.git/**'];
-
-        const files: string[] = [];
-        for (const folder of workspaceFolders) {
-            const relativePattern = new vscode.RelativePattern(folder, `{${includePatterns.join(',')}}`);
-            const foundFiles = await vscode.workspace.findFiles(relativePattern, `{${excludePatterns.join(',')}}`);
-            files.push(...foundFiles.map(file => file.fsPath));
-        }
-
-        return files;
-    }
-
-    private async handleGetFile(payload: { path: string }): Promise<string> {
-        const doc = await vscode.workspace.openTextDocument(payload.path);
-        const lines = doc.getText().split('\n');
-        return lines.map((line, i) => `${i + 1}: ${line}`).join('\n');
-    }
-
-    private async handleDebug(payload: { steps: DebugStep[] }): Promise<string[]> {
-        const results: string[] = [];
-
-        for (const step of payload.steps) {
-            switch (step.type) {
-                case 'setBreakpoint': {
-                    if (!step.line) {
-                        throw new Error('Line number required');
-                    }
-                    if (!step.file) {
-                        throw new Error('File path required');
-                    }
-
-                    // Open the file and make it active
-                    const document = await vscode.workspace.openTextDocument(step.file);
-                    const editor = await vscode.window.showTextDocument(document);
-
-                    const bp = new vscode.SourceBreakpoint(
-                        new vscode.Location(
-                            editor.document.uri,
-                            new vscode.Position(step.line - 1, 0)
-                        ),
-                        true,
-                        step.condition,
-                    );
-                    await vscode.debug.addBreakpoints([bp]);
-                    results.push(`Set breakpoint at line ${step.line}`);
-                    break;
+        switch (args.action) {
+            case 'evaluate': {
+                if (!args.expression) {
+                    throw new Error('expression is required for evaluate action');
                 }
 
-                case 'removeBreakpoint': {
-                    if (!step.line) {
-                        throw new Error('Line number required');
-                    }
-                    const bps = vscode.debug.breakpoints.filter(bp => {
-                        if (bp instanceof vscode.SourceBreakpoint) {
-                            return bp.location.range.start.line === step.line! - 1;
-                        }
-                        return false;
-                    });
-                    await vscode.debug.removeBreakpoints(bps);
-                    results.push(`Removed breakpoint at line ${step.line}`);
-                    break;
-                }
+                let frameId = args.frameId;
 
-                case 'continue': {
-                    const session = vscode.debug.activeDebugSession;
-                    if (!session) {
-                        throw new Error('No active debug session');
-                    }
-
-                    // Get the current thread ID (required by DAP spec)
-                    const threads = await session.customRequest('threads');
-                    const threadId = threads.threads[0].id;
-
-                    // Continue with the thread ID
-                    await session.customRequest('continue', { threadId });
-                    results.push('Continued execution');
-                    break;
-                }
-
-                case 'evaluate': {
-                    const session = vscode.debug.activeDebugSession;
-                    if (!session) {
-                        throw new Error('No active debug session');
-                    }
-
+                if (frameId === undefined) {
+                    // Try to get frameId from activeStackItem
                     const activeStackItem = vscode.debug.activeStackItem;
-
-                    // Grab the active frameId
-                    let frameId = undefined;
                     if (activeStackItem instanceof vscode.DebugStackFrame) {
                         frameId = activeStackItem.frameId;
                     }
-
-                    // In case activeStackItem.frameId is falsey
-                    if (!frameId) {
-                        // Get the current stack frame
-                        const frames = await session.customRequest('stackTrace', {
-                            threadId: 1  // You might need to get the actual threadId
-                        });
-
-                        if (!frames || !frames.stackFrames || frames.stackFrames.length === 0) {
-                            vscode.window.showErrorMessage('No stack frame available');
-                            break;
-                        }
-
-                        frameId = frames.stackFrames[0].id;  // Usually use the top frame
-                    }
-
-                    try {
-                        const response = await session.customRequest('evaluate', {
-                            expression: step.expression,
-                            frameId: frameId,
-                            context: 'repl'
-                        });
-
-                        results.push(`Evaluated "${step.expression}": ${response.result}`);
-                    } catch (err: any) {
-                        let errorMessage = '';
-                        let stackTrace = '';
-
-                        if (err instanceof Error) {
-                            errorMessage = err.message;
-                            if (err.stack) {
-                                stackTrace = `\nStack: ${err.stack}`;
-                            }
-                        } else {
-                            errorMessage = String(err);
-                        }
-                        results.push(`ERROR: Evaluation failed for "${step.expression}": ${errorMessage}${stackTrace}`);
-                    }
-                    break;
                 }
 
-                case 'launch': {
-                    await this.handleLaunch({ program: step.file });
+                if (frameId === undefined) {
+                    // Fall back to getting top frame from stack trace
+                    const threadId = await this.resolveThreadId(session, args.threadId);
+                    const frames = await session.customRequest('stackTrace', { threadId });
+                    if (!frames?.stackFrames?.length) {
+                        throw new Error('No stack frame available');
+                    }
+                    frameId = frames.stackFrames[0].id;
                 }
+
+                const response = await session.customRequest('evaluate', {
+                    expression: args.expression,
+                    frameId,
+                    context: args.context || 'repl',
+                });
+
+                return {
+                    result: response.result,
+                    type: response.type,
+                    variablesReference: response.variablesReference,
+                };
             }
-        }
 
-        return results;
+            case 'stackTrace': {
+                const threadId = await this.resolveThreadId(session, args.threadId);
+                const stackResponse = await session.customRequest('stackTrace', {
+                    threadId,
+                    startFrame: args.startFrame ?? 0,
+                    levels: args.levels ?? 20,
+                });
+
+                const frames = (stackResponse.stackFrames || []).map((f: any) => ({
+                    id: f.id,
+                    name: f.name,
+                    file: f.source?.path || f.source?.name || '<unknown>',
+                    line: f.line,
+                    column: f.column,
+                }));
+
+                return { threadId, frames, totalFrames: stackResponse.totalFrames };
+            }
+
+            default:
+                throw new Error(`Unknown inspect action: ${args.action}`);
+        }
+    }
+
+    // Dispatch tool calls from /tcp endpoint
+    private async handleCommand(request: ToolRequest): Promise<any> {
+        switch (request.tool) {
+            case 'debug_execute':
+                return await this.handleExecute(request.arguments);
+            case 'debug_breakpoints':
+                return await this.handleBreakpoints(request.arguments);
+            case 'debug_inspect':
+                return await this.handleInspect(request.arguments);
+            default:
+                throw new Error(`Unknown tool: ${request.tool}`);
+        }
     }
 
     stop(): Promise<void> {

@@ -4,6 +4,13 @@ All notable changes to the "vscode-debug-mcp" extension will be documented in th
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.1.1](https://github.com/PeakBI/vscode-debug-mcp/compare/v0.1.0...v0.1.1) (2026-02-10)
+
+
+### Bug Fixes
+
+* build VSIX in release-please workflow ([51349e7](https://github.com/PeakBI/vscode-debug-mcp/commit/51349e7097a754e01ff8e06c7a00090a7cc204f1))
+
 ## [0.1.0](https://github.com/PeakBI/vscode-debug-mcp/compare/v0.0.4...v0.1.0) (2026-02-10)
 
 

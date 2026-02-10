@@ -69,6 +69,15 @@ export class DebugTreeDataProvider implements vscode.TreeDataProvider<vscode.Tre
         sseItem.contextValue = 'sseAddress';
         items.push(sseItem);
 
+        // Claude Code command row
+        const claudeCommand = `claude mcp add --transport stdio vscode-debug -- node ${this.mcpServerPath}`;
+        const claudeItem = new vscode.TreeItem('Claude Code', vscode.TreeItemCollapsibleState.None);
+        claudeItem.description = 'claude mcp add ...';
+        claudeItem.tooltip = claudeCommand;
+        claudeItem.iconPath = new vscode.ThemeIcon('terminal');
+        claudeItem.contextValue = 'claudeCodeCommand';
+        items.push(claudeItem);
+
         // Autostart row
         const config = vscode.workspace.getConfiguration('mcpDebug');
         const autostart = config.get<boolean>('autostart') ?? true;

@@ -40,6 +40,11 @@
         "icon": "$(copy)"
       },
       {
+        "command": "vscode-debug-mcp.copyClaudeCodeCommand",
+        "title": "VSCode Debug MCP: Copy Claude Code Setup Command",
+        "icon": "$(copy)"
+      },
+      {
         "command": "vscode-debug-mcp.setPort",
         "title": "VSCode Debug MCP: Set Port"
       },
@@ -76,6 +81,11 @@
         {
           "command": "vscode-debug-mcp.copySseAddress",
           "when": "view == mcpDebugView && viewItem == sseAddress",
+          "group": "inline"
+        },
+        {
+          "command": "vscode-debug-mcp.copyClaudeCodeCommand",
+          "when": "view == mcpDebugView && viewItem == claudeCodeCommand",
           "group": "inline"
         }
       ]

@@ -25,8 +25,8 @@ This is an [MCP](https://docs.anthropic.com/en/docs/build-with-claude/mcp) serve
 
 ### Claude Code
 
-4. Copy the stdio server path to your clipboard using the VS Code command "Copy MCP Debug Server stdio path to clipboard"
-5. Add the MCP server:
+4. Copy the ready-to-paste setup command using the "Copy Claude Code Setup Command" button in the Debug tab's MCP Debug Server panel, or via the VS Code command palette ("VSCode Debug MCP: Copy Claude Code Setup Command").
+5. Paste and run it in your terminal:
 
 ```bash
 claude mcp add --transport stdio vscode-debug -- node /path/to/mcp-debug.js

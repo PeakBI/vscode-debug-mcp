@@ -10,5 +10,5 @@ src/**
 **/.vscode-test.*
 *.visx
 mcp/**
-!mcp/build/index.js
+!mcp/build/index.cjs
 .idea

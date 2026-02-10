@@ -50,6 +50,11 @@ MCP Client (stdio) → mcp/build/index.js → HTTP POST /tcp → DebugServer →
 MCP Client (SSE)   → /sse endpoint → DebugServer → VS Code Debug API
 ```
 
+## Commits and Releases
+
+- Use **conventional commits**: `fix:`, `feat:`, `feat!:`, `chore:`, `docs:`, `refactor:`, etc.
+- Releases are automated via [release-please](https://github.com/googleapis/release-please). Conventional commits on `main` trigger a Release PR with version bumps and changelog updates. Merging the PR creates a GitHub release, which triggers CI to build the VSIX.
+
 ## Key Details
 
 - Default port: 4711 (configurable via `mcpDebug.port` setting)

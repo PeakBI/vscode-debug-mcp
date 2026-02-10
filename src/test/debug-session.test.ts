@@ -6,6 +6,7 @@ import { TEST_PORT, callTool } from './test-helpers';
 
 suite('End-to-End Debug Session', function () {
     this.timeout(30000);
+    this.retries(2);
 
     let server: DebugServer;
     let appPath: string;

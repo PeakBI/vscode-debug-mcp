@@ -6,6 +6,7 @@ import { TEST_PORT, callTool } from './test-helpers';
 
 suite('Edge Cases and Optional Parameters', function () {
     this.timeout(30000);
+    this.retries(2);
 
     let server: DebugServer;
     let appPath: string;

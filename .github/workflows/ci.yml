@@ -68,6 +68,9 @@ jobs:
       - name: Install MCP subproject dependencies
         run: cd mcp && npm ci
 
+      - name: Build bridge
+        run: cd mcp && npm run build
+
       - name: Run bridge tests with coverage
         run: cd mcp && npx vitest run --coverage --coverage.reporter=lcov --coverage.reportsDirectory=./coverage
 

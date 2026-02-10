@@ -216,29 +216,39 @@ suite('Breakpoint Management', function () {
 
     // --- error handling for execute/inspect without session ---
 
-    test('debug_execute stop with no session returns message', async () => {
-        const result = await callTool('debug_execute', { action: 'stop' });
-        assert.strictEqual(result.message, 'No active debug session');
-    });
+    suite('no active session errors', function () {
+        setup(async () => {
+            // Ensure no debug session is active before each test
+            if (vscode.debug.activeDebugSession) {
+                await vscode.debug.stopDebugging();
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        });
 
-    test('debug_execute continue with no session throws', async () => {
-        await assert.rejects(
-            callTool('debug_execute', { action: 'continue' }),
-            /No active debug session/
-        );
-    });
+        test('debug_execute stop with no session returns message', async () => {
+            const result = await callTool('debug_execute', { action: 'stop' });
+            assert.strictEqual(result.message, 'No active debug session');
+        });
 
-    test('debug_inspect evaluate with no session throws', async () => {
-        await assert.rejects(
-            callTool('debug_inspect', { action: 'evaluate', expression: 'x' }),
-            /No active debug session/
-        );
-    });
+        test('debug_execute continue with no session throws', async () => {
+            await assert.rejects(
+                callTool('debug_execute', { action: 'continue' }),
+                /No active debug session/
+            );
+        });
 
-    test('debug_inspect stackTrace with no session throws', async () => {
-        await assert.rejects(
-            callTool('debug_inspect', { action: 'stackTrace' }),
-            /No active debug session/
-        );
+        test('debug_inspect evaluate with no session throws', async () => {
+            await assert.rejects(
+                callTool('debug_inspect', { action: 'evaluate', expression: 'x' }),
+                /No active debug session/
+            );
+        });
+
+        test('debug_inspect stackTrace with no session throws', async () => {
+            await assert.rejects(
+                callTool('debug_inspect', { action: 'stackTrace' }),
+                /No active debug session/
+            );
+        });
     });
 });

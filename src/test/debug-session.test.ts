@@ -21,9 +21,13 @@ suite('End-to-End Debug Session', function () {
     });
 
     suiteTeardown(async () => {
-        // Ensure clean state
+        // Ensure clean state — wait for session to fully terminate
         if (vscode.debug.activeDebugSession) {
             await vscode.debug.stopDebugging();
+        }
+        for (let i = 0; i < 20; i++) {
+            if (!vscode.debug.activeDebugSession) { break; }
+            await new Promise(resolve => setTimeout(resolve, 250));
         }
         vscode.debug.removeBreakpoints(vscode.debug.breakpoints);
         await server.stop();

@@ -4,11 +4,12 @@
   "main": "index.js",
   "type": "module",
   "bin": {
-    "mcp-debug": "./build/index.js"
+    "mcp-debug": "./build/index.cjs"
   },
   "scripts": {
     "build": "node build.js",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "vitest run"
   },
   "files": [
     "build"
@@ -23,6 +24,7 @@
   "devDependencies": {
     "@types/node": "^22.10.7",
     "esbuild": "^0.24.2",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "vitest": "^4.0.18"
   }
 }

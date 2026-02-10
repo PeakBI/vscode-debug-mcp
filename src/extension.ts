@@ -11,7 +11,7 @@ export function activate(context: vscode.ExtensionContext) {
     // Ensure the storage directory exists
     fs.mkdirSync(storagePath, { recursive: true });
     const mcpServerPath = path.join(storagePath, 'mcp-debug.js');
-    const sourcePath = path.join(context.extensionUri.fsPath, 'mcp', 'build', 'index.js');
+    const sourcePath = path.join(context.extensionUri.fsPath, 'mcp', 'build', 'index.cjs');
 
     try {
         fs.copyFileSync(sourcePath, mcpServerPath);

@@ -2,11 +2,11 @@
   "name": "vscode-debug-mcp",
   "displayName": "VSCode Debug MCP",
   "description": "Enable an MCP Client to directly debug code with breakpoints, expression evaluation, and program launching",
-  "version": "0.1.2",
+  "version": "0.0.2",
   "repository": "https://github.com/PeakBI/vscode-debug-mcp",
-  "author": "Jason McGhee",
+  "author": "Tom Preece",
   "publisher": "PeakBI",
-  "icon": "images/vscode-debug-mcp.png",
+  "icon": "images/vscode-debug-mcp-logo-1024.png",
   "engines": {
     "vscode": "^1.96.0"
   },

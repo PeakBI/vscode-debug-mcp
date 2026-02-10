@@ -3,6 +3,33 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { tools } from '../debug-server';
 
+suite('Package.json Commands', () => {
+    let packageJson: any;
+
+    suiteSetup(() => {
+        const pkgPath = path.resolve(__dirname, '../../package.json');
+        packageJson = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    });
+
+    test('copyClaudeCodeCommand is registered', () => {
+        const commands = packageJson.contributes.commands.map((c: any) => c.command);
+        assert.ok(
+            commands.includes('vscode-debug-mcp.copyClaudeCodeCommand'),
+            'package.json should register copyClaudeCodeCommand'
+        );
+    });
+
+    test('claudeCodeCommand has inline menu entry', () => {
+        const menuItems = packageJson.contributes.menus['view/item/context'];
+        const entry = menuItems.find(
+            (m: any) => m.command === 'vscode-debug-mcp.copyClaudeCodeCommand'
+        );
+        assert.ok(entry, 'should have a menu entry for copyClaudeCodeCommand');
+        assert.strictEqual(entry.when, 'view == mcpDebugView && viewItem == claudeCodeCommand');
+        assert.strictEqual(entry.group, 'inline');
+    });
+});
+
 suite('Schema Consistency', () => {
 
     test('tools array has exactly 3 tools', () => {

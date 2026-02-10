@@ -190,6 +190,11 @@ export function activate(context: vscode.ExtensionContext) {
             await vscode.env.clipboard.writeText(`http://localhost:${currentPort}/sse`);
             vscode.window.showInformationMessage(`MCP sse server address copied to clipboard.`);
         }),
+        vscode.commands.registerCommand('vscode-debug-mcp.copyClaudeCodeCommand', async () => {
+            const command = `claude mcp add --transport stdio vscode-debug -- node ${mcpServerPath}`;
+            await vscode.env.clipboard.writeText(command);
+            vscode.window.showInformationMessage('Claude Code setup command copied to clipboard.');
+        }),
         vscode.commands.registerCommand('vscode-debug-mcp.setPort', async () => {
             // Always get the latest configuration
             const updatedConfig = vscode.workspace.getConfiguration('mcpDebug');

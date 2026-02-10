@@ -23,6 +23,8 @@ This is an [MCP](https://docs.anthropic.com/en/docs/build-with-claude/mcp) serve
    - If using `.vsix` directly, go to the three dots in "Extensions" in VS Code and choose "Install from VSIX..."
 3. Once installed, you'll see an "MCP Debug Server" panel in the Debug tab showing the server status, stdio path, and SSE address.
 
+![MCP Debug Server panel](./images/mcp-debug-server-view.png)
+
 ### Claude Code
 
 4. Copy the ready-to-paste setup command using the "Copy Claude Code Setup Command" button in the Debug tab's MCP Debug Server panel, or via the VS Code command palette ("VSCode Debug MCP: Copy Claude Code Setup Command").

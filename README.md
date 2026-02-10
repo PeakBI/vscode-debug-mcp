@@ -71,6 +71,40 @@ Or add it to your project's `.mcp.json`:
 
 When multiple VS Code windows are open, the extension handles graceful hand-off of the MCP server between windows.
 
+## Architecture
+
+```mermaid
+graph LR
+    subgraph MCP Clients
+        A[Claude Code / stdio client]
+        B[Cursor / SSE client]
+    end
+
+    subgraph Stdio Bridge
+        C[mcp-debug.js]
+    end
+
+    subgraph VS Code Extension
+        D[DebugServer]
+        E[VS Code Debug API]
+    end
+
+    F[Any Debugger<br/>Python, Node.js, C++, Go, ...]
+
+    A -- stdio --> C
+    C -- HTTP POST /tcp --> D
+    B -- SSE /sse --> D
+    D --> E
+    E --> F
+```
+
+The extension provides two ways for MCP clients to connect:
+
+- **Stdio** — A standalone Node.js bridge process (`mcp-debug.js`) receives MCP requests over stdio and forwards them via HTTP to the extension's debug server. Used by Claude Code and other stdio-based clients.
+- **SSE** — Clients connect directly to the extension's SSE endpoint. Used by Cursor and other SSE-capable clients.
+
+Both paths use the VS Code Debug API under the hood, which means the extension works with any language/debugger that supports `launch.json` configurations (Python, Node.js, C++, Go, etc.).
+
 ## Developing
 
 1. Clone and open this repo in VS Code

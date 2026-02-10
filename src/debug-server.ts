@@ -31,17 +31,39 @@ interface StoppedState {
     stackTrace: Array<{ id: number; name: string; file: string; line: number; column: number }>;
 }
 
+// Server-level instructions for LLMs
+const serverInstructions = `This server controls VS Code's debugger. Typical workflow:
+1. Set breakpoints with debug_breakpoints (action: "set")
+2. Launch the program with debug_execute (action: "launch")
+3. When stopped at a breakpoint, inspect state with debug_inspect
+4. Step through code with debug_execute (stepOver/stepIn/stepOut)
+5. Stop the session with debug_execute (action: "stop")
+
+The program must be paused (at a breakpoint or after a step) before you can inspect state or step. All file paths must be absolute.`;
+
 // Tool descriptions
-const executeDescription = `Control program execution during debugging. Use 'launch' to start a debug session (set breakpoints FIRST). Use 'continue' to run to the next breakpoint. Use 'stepOver' to execute the current line, 'stepIn' to enter a function call, 'stepOut' to finish the current function. Use 'stop' to end the debug session. After launch/continue/step actions, returns the stopped location and stack trace.`;
+const executeDescription = `Control debug session execution. Actions:
+- launch: Start a debug session using a launch.json configuration. Returns the stopped location if a breakpoint is hit, or a status message if the program is still running after 10s.
+- continue: Resume execution until the next breakpoint. Returns the new stopped location.
+- stepOver/stepIn/stepOut: Step through code. Returns the new stopped location and stack trace.
+- stop: End the debug session.
+Requires an active debug session for all actions except launch.`;
 
-const breakpointsDescription = `Manage breakpoints. Use 'set' to add a breakpoint at a file and line (absolute path required). Use 'remove' to delete a breakpoint at a specific file and line. Use 'list' to see all current breakpoints. Set breakpoints BEFORE launching the debug session or while paused.`;
+const breakpointsDescription = `Manage source breakpoints in VS Code. Actions:
+- set: Add a breakpoint at a file:line. Returns confirmation with the location.
+- remove: Remove a breakpoint at a file:line. Returns the number removed.
+- list: List all current breakpoints. Returns file, line, enabled status, and any conditions.
+File paths must be absolute. Breakpoints persist across debug sessions.`;
 
-const inspectDescription = `Inspect program state while paused at a breakpoint. Use 'evaluate' to evaluate an expression in the current stack frame (e.g. inspect variables, check conditions). Use 'stackTrace' to see the full call chain that led to the current location. The program must be paused.`;
+const inspectDescription = `Inspect program state while paused at a breakpoint. Actions:
+- evaluate: Evaluate an expression (variable name, method call, condition) in the current stack frame. Returns the result value and type.
+- stackTrace: Get the current call stack. Returns an array of frames with file, line, column, and function name.
+Requires an active debug session that is paused.`;
 
 // Zod schemas for the 3 tools
 const executeInputSchema = {
     action: z.enum(["launch", "stop", "continue", "stepOver", "stepIn", "stepOut"]).describe("The execution action to perform"),
-    configurationName: z.string().optional().describe("Name of the launch configuration to use (only for launch). If omitted and multiple configs exist, returns the available names."),
+    configurationName: z.string().optional().describe("Name of the launch.json configuration to use (only for launch). If omitted with multiple configs, returns the available names so you can choose."),
     noDebug: z.boolean().optional().describe("If true, launch without debugging (only for launch)"),
     threadId: z.number().optional().describe("Thread ID to operate on (for continue/step*). If omitted, uses the active thread."),
     granularity: z.enum(["statement", "line", "instruction"]).optional().describe("Stepping granularity (for step* actions)"),
@@ -60,7 +82,7 @@ const inspectInputSchema = {
     action: z.enum(["evaluate", "stackTrace"]).describe("The inspection action to perform"),
     expression: z.string().optional().describe("Expression to evaluate (required for evaluate)"),
     frameId: z.number().optional().describe("Stack frame ID for evaluation context (for evaluate)"),
-    context: z.enum(["watch", "repl", "hover", "clipboard"]).optional().describe("Evaluation context (for evaluate)"),
+    context: z.enum(["watch", "repl", "hover", "clipboard"]).optional().describe("Evaluation context: 'repl' (default) executes as code, 'watch' evaluates without side effects, 'hover' for quick inspection, 'clipboard' formats for copying"),
     threadId: z.number().optional().describe("Thread ID (for stackTrace). If omitted, uses the active thread."),
     startFrame: z.number().optional().describe("First frame to return (for stackTrace)"),
     levels: z.number().optional().describe("Maximum number of frames to return (for stackTrace)"),
@@ -75,7 +97,7 @@ export const tools = [
             type: "object",
             properties: {
                 action: { type: "string", enum: ["launch", "stop", "continue", "stepOver", "stepIn", "stepOut"], description: "The execution action to perform" },
-                configurationName: { type: "string", description: "Name of the launch configuration to use (only for launch)" },
+                configurationName: { type: "string", description: "Name of the launch.json configuration to use (only for launch). If omitted with multiple configs, returns the available names so you can choose." },
                 noDebug: { type: "boolean", description: "If true, launch without debugging (only for launch)" },
                 threadId: { type: "number", description: "Thread ID to operate on (for continue/step*)" },
                 granularity: { type: "string", enum: ["statement", "line", "instruction"], description: "Stepping granularity (for step* actions)" },
@@ -108,7 +130,7 @@ export const tools = [
                 action: { type: "string", enum: ["evaluate", "stackTrace"], description: "The inspection action to perform" },
                 expression: { type: "string", description: "Expression to evaluate (required for evaluate)" },
                 frameId: { type: "number", description: "Stack frame ID for evaluation context (for evaluate)" },
-                context: { type: "string", enum: ["watch", "repl", "hover", "clipboard"], description: "Evaluation context (for evaluate)" },
+                context: { type: "string", enum: ["watch", "repl", "hover", "clipboard"], description: "Evaluation context: 'repl' (default) executes as code, 'watch' evaluates without side effects, 'hover' for quick inspection, 'clipboard' formats for copying" },
                 threadId: { type: "number", description: "Thread ID (for stackTrace)" },
                 startFrame: { type: "number", description: "First frame to return (for stackTrace)" },
                 levels: { type: "number", description: "Maximum number of frames to return (for stackTrace)" },
@@ -133,6 +155,8 @@ export class DebugServer extends EventEmitter implements DebugServerEvents {
         this.mcpServer = new McpServer({
             name: "Debug Server",
             version: "1.0.0",
+        }, {
+            instructions: serverInstructions,
         });
 
         // Register the 3 new MCP tools

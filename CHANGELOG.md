@@ -4,6 +4,19 @@ All notable changes to the "vscode-debug-mcp" extension will be documented in th
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.1.0](https://github.com/PeakBI/vscode-debug-mcp/compare/v0.0.4...v0.1.0) (2026-02-10)
+
+
+### Features
+
+* add release-please for automated releases ([71c62c1](https://github.com/PeakBI/vscode-debug-mcp/commit/71c62c1b7f610cc4e5efa65a8f3a8814da6545ad))
+* add release-please for automated releases ([061c644](https://github.com/PeakBI/vscode-debug-mcp/commit/061c644daa0ae78170e1332683d03bbc57da162f))
+
+
+### Bug Fixes
+
+* use plain version tags for release-please ([df67189](https://github.com/PeakBI/vscode-debug-mcp/commit/df67189e2be7faf97e7eba21aec6ee4452006f8d))
+
 ## 0.1.2
 
 - Report exceptions to LLM

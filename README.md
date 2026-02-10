@@ -1,5 +1,9 @@
 # <img src="./images/vscode-debug-mcp-logo-128.png" width="64" height="64" alt="VSCode Debug MCP" align="center"> VSCode Debug MCP
 
+[![CI](https://github.com/PeakBI/vscode-debug-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/PeakBI/vscode-debug-mcp/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/PeakBI/vscode-debug-mcp/graph/badge.svg)](https://codecov.io/gh/PeakBI/vscode-debug-mcp)
+![VS Code](https://img.shields.io/badge/VS%20Code-%3E%3D1.96.0-blue)
+
 Enable an MCP Client to interactively debug code with breakpoints, expression evaluation, and program launching.
 
 This is an [MCP](https://docs.anthropic.com/en/docs/build-with-claude/mcp) server and VS Code extension that exposes debugging capabilities via the Model Context Protocol. It's language-agnostic — it works with any debugger that has a valid `launch.json` in VS Code.

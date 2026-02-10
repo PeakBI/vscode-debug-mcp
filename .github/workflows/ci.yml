@@ -53,6 +53,7 @@ jobs:
         if: always()
         uses: codecov/codecov-action@v5
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/lcov.info
           flags: extension
 
@@ -78,5 +79,6 @@ jobs:
         if: always()
         uses: codecov/codecov-action@v5
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: ./mcp/coverage/lcov.info
           flags: bridge

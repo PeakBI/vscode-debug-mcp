@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install MCP subproject dependencies
+        run: cd mcp && npm ci
+
+      - name: Compile
+        run: npm run compile
+
+      - name: Lint
+        run: npm run lint
+
+  test-extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install MCP subproject dependencies
+        run: cd mcp && npm ci
+
+      - name: Compile
+        run: npm run compile
+
+      - name: Run extension tests with coverage
+        run: xvfb-run -a npx vscode-test --coverage --coverage-output ./coverage --coverage-reporter lcov
+
+      - name: Upload extension coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage/lcov.info
+          flags: extension
+
+  test-mcp-bridge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install MCP subproject dependencies
+        run: cd mcp && npm ci
+
+      - name: Build bridge
+        run: cd mcp && npm run build
+
+      - name: Run bridge tests with coverage
+        run: cd mcp && npx vitest run --coverage --coverage.reporter=lcov --coverage.reportsDirectory=./coverage
+
+      - name: Upload bridge coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./mcp/coverage/lcov.info
+          flags: bridge

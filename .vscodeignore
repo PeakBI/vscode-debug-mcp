@@ -11,4 +11,6 @@ src/**
 *.visx
 mcp/**
 !mcp/build/index.cjs
+node_modules/**
+esbuild.js
 .idea

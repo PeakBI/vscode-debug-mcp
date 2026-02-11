@@ -143,15 +143,13 @@ export const tools = [
 export class DebugServer extends EventEmitter implements DebugServerEvents {
     private server: net.Server | null = null;
     private port: number = 4711;
-    private portConfigPath: string | null = null;
     private activeTransports: Record<string, SSEServerTransport> = {};
     private mcpServer: McpServer;
     private _isRunning: boolean = false;
 
-    constructor(port?: number, portConfigPath?: string) {
+    constructor(port?: number) {
         super();
         this.port = port || 4711;
-        this.portConfigPath = portConfigPath || null;
         this.mcpServer = new McpServer({
             name: "Debug Server",
             version: "1.0.0",
@@ -182,61 +180,10 @@ export class DebugServer extends EventEmitter implements DebugServerEvents {
 
     setPort(port: number): void {
         this.port = port || 4711;
-
-        if (this.portConfigPath && typeof port === 'number') {
-            try {
-                const fs = require('fs');
-                fs.writeFileSync(this.portConfigPath, JSON.stringify({ port }));
-            } catch (err) {
-                console.error('Failed to update port configuration file:', err);
-            }
-        }
     }
 
     getPort(): number {
         return this.port;
-    }
-
-    async forceStopExistingServer(): Promise<void> {
-        try {
-            await new Promise<void>((resolve, reject) => {
-                const req = http.request({
-                    hostname: 'localhost',
-                    port: this.port,
-                    path: '/shutdown',
-                    method: 'POST',
-                    timeout: 3000
-                }, (res) => {
-                    let data = '';
-                    res.on('data', chunk => data += chunk);
-                    res.on('end', () => {
-                        if (res.statusCode === 200) {
-                            setTimeout(resolve, 500);
-                        } else {
-                            reject(new Error(`Unexpected status: ${res.statusCode}`));
-                        }
-                    });
-                });
-
-                req.on('error', (err: NodeJS.ErrnoException) => {
-                    if (err.code === 'ECONNREFUSED') {
-                        resolve();
-                    } else {
-                        reject(err);
-                    }
-                });
-
-                req.on('timeout', () => {
-                    req.destroy();
-                    reject(new Error('Request timed out'));
-                });
-
-                req.end();
-            });
-        } catch (err) {
-            console.error('Error requesting server shutdown:', err);
-            throw new Error('Failed to stop existing server');
-        }
     }
 
     async start(): Promise<void> {
@@ -316,13 +263,30 @@ export class DebugServer extends EventEmitter implements DebugServerEvents {
             res.writeHead(404).end();
         });
 
-        return new Promise((resolve, reject) => {
-            this.server!.listen(this.port, () => {
-                this._isRunning = true;
-                this.emit('started');
-                resolve();
-            }).on('error', reject);
-        });
+        const maxAttempts = 10;
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            const portToTry = this.port + attempt;
+            try {
+                await new Promise<void>((resolve, reject) => {
+                    this.server!.once('error', reject);
+                    this.server!.listen(portToTry, () => {
+                        this.server!.removeAllListeners('error');
+                        this.port = portToTry;
+                        this._isRunning = true;
+                        this.emit('started');
+                        resolve();
+                    });
+                });
+                return; // Successfully bound
+            } catch (err: any) {
+                if (err.code === 'EADDRINUSE' && attempt < maxAttempts - 1) {
+                    // Port in use, try the next one
+                    this.server!.removeAllListeners('error');
+                    continue;
+                }
+                throw err;
+            }
+        }
     }
 
     // --- Shared helpers ---

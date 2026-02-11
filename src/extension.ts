@@ -20,18 +20,49 @@ export function activate(context: vscode.ExtensionContext) {
         return;
     }
 
+    // --- Port registry helpers ---
+    // Maps workspace folder paths to ports so the stdio bridge can find the right server
+    const portConfigPath = path.join(storagePath, 'port-config.json');
+
+    function readPortRegistry(): Record<string, number> {
+        try {
+            if (fs.existsSync(portConfigPath)) {
+                return JSON.parse(fs.readFileSync(portConfigPath, 'utf8'));
+            }
+        } catch (_) { /* ignore */ }
+        return {};
+    }
+
+    function writePortRegistry(registry: Record<string, number>): void {
+        try {
+            fs.writeFileSync(portConfigPath, JSON.stringify(registry, null, 2));
+        } catch (err: any) {
+            vscode.window.showErrorMessage(`Failed to write port configuration: ${err.message}`);
+        }
+    }
+
+    function registerWorkspacePorts(port: number): void {
+        const registry = readPortRegistry();
+        const folders = vscode.workspace.workspaceFolders ?? [];
+        for (const folder of folders) {
+            registry[folder.uri.fsPath] = port;
+        }
+        writePortRegistry(registry);
+    }
+
+    function unregisterWorkspacePorts(): void {
+        const registry = readPortRegistry();
+        const folders = vscode.workspace.workspaceFolders ?? [];
+        for (const folder of folders) {
+            delete registry[folder.uri.fsPath];
+        }
+        writePortRegistry(registry);
+    }
+
     const config = vscode.workspace.getConfiguration('mcpDebug');
     const port = config.get<number>('port') ?? 4711;
 
-    // Write port configuration to a file that can be read by the MCP server
-    const portConfigPath = path.join(storagePath, 'port-config.json');
-    try {
-        fs.writeFileSync(portConfigPath, JSON.stringify({ port }));
-    } catch (err: any) {
-        vscode.window.showErrorMessage(`Failed to write port configuration: ${err.message}`);
-    }
-
-    const server = new DebugServer(port, portConfigPath);
+    const server = new DebugServer(port);
 
     // Create tree view provider for the debug panel
     const treeProvider = new DebugTreeDataProvider(server, port, mcpServerPath);
@@ -48,14 +79,6 @@ export function activate(context: vscode.ExtensionContext) {
                 // Always reload the latest configuration
                 const updatedConfig = vscode.workspace.getConfiguration('mcpDebug');
                 const newPort = updatedConfig.get<number>('port') ?? 4711;
-
-                // Update port configuration file
-                try {
-                    const portConfigPath = path.join(storagePath, 'port-config.json');
-                    fs.writeFileSync(portConfigPath, JSON.stringify({ port: newPort }));
-                } catch (err: any) {
-                    vscode.window.showErrorMessage(`Failed to write port configuration: ${err.message}`);
-                }
 
                 // Update server's port setting
                 server.setPort(newPort);
@@ -80,77 +103,13 @@ export function activate(context: vscode.ExtensionContext) {
 
         try {
             await server.start();
+            // Update tree view and port registry with the actual port (may differ if configured port was in use)
+            const actualPort = server.getPort();
+            treeProvider.setPort(actualPort);
+            registerWorkspacePorts(actualPort);
         } catch (err: any) {
-            // Stop our own server
             await server.stop();
-
-            // Check if this is likely a port conflict (server already running)
-            const nodeErr = err as NodeJS.ErrnoException;
-            if ((nodeErr.code === 'EADDRINUSE') || (nodeErr.message && nodeErr.message.includes('already running'))) {
-                const response = await vscode.window.showInformationMessage(
-                    `Failed to start debug server. Another server is likely already running in a different VS Code window. Would you like to stop it and start the server in this window?`,
-                    'Yes', 'No', 'Disable Autostart'
-                );
-
-                if (response === 'Yes') {
-                    try {
-                        // First try to stop any existing server
-                        await server.forceStopExistingServer();
-
-                        // Wait for the port to be released with retry logic
-                        let portAvailable = false;
-                        let retryCount = 0;
-                        const maxRetries = 5;
-                        const currentPort = server.getPort();
-
-                        while (!portAvailable && retryCount < maxRetries) {
-                            try {
-                                // Check if port is available
-                                const net = require('net');
-                                const testServer = net.createServer();
-
-                                await new Promise<void>((resolve, reject) => {
-                                    testServer.once('error', (err: any) => {
-                                        testServer.close();
-                                        if (err.code === 'EADDRINUSE') {
-                                            reject(new Error('Port still in use'));
-                                        } else {
-                                            reject(err);
-                                        }
-                                    });
-
-                                    testServer.once('listening', () => {
-                                        testServer.close();
-                                        portAvailable = true;
-                                        resolve();
-                                    });
-
-                                    testServer.listen(currentPort);
-                                });
-                            } catch (err) {
-                                // Port still in use, wait and retry
-                                await new Promise(resolve => setTimeout(resolve, 500));
-                                retryCount++;
-                            }
-                        }
-
-                        if (!portAvailable) {
-                            throw new Error(`Port ${currentPort} is still in use after ${maxRetries} attempts to release it`);
-                        }
-
-                        // Now try to start our server
-                        await server.start();
-                    } catch (startErr: any) {
-                        vscode.window.showErrorMessage(`Still failed to start debug server: ${startErr.message}`);
-                    }
-                } else if (response === 'Disable Autostart') {
-                    // Update autostart configuration to false
-                    await startupConfig.update('autostart', false, vscode.ConfigurationTarget.Global);
-                    vscode.window.showInformationMessage('Autostart has been disabled');
-                }
-            } else {
-                vscode.window.showErrorMessage(`Failed to start debug server: ${err.message}`);
-            }
+            vscode.window.showErrorMessage(`Failed to start debug server: ${err.message}`);
         }
     }
 
@@ -173,6 +132,7 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('vscode-debug-mcp.stop', () => {
             server.stop()
                 .then(() => {
+                    unregisterWorkspacePorts();
                     vscode.window.showInformationMessage('MCP Debug Server stopped');
                 })
                 .catch(err => {
@@ -184,10 +144,7 @@ export function activate(context: vscode.ExtensionContext) {
             vscode.window.showInformationMessage(`MCP stdio server path copied to clipboard.`);
         }),
         vscode.commands.registerCommand('vscode-debug-mcp.copySseAddress', async () => {
-            // Always get the latest port from config
-            const updatedConfig = vscode.workspace.getConfiguration('mcpDebug');
-            const currentPort = updatedConfig.get<number>('port') ?? 4711;
-            await vscode.env.clipboard.writeText(`http://localhost:${currentPort}/sse`);
+            await vscode.env.clipboard.writeText(`http://localhost:${server.getPort()}/sse`);
             vscode.window.showInformationMessage(`MCP sse server address copied to clipboard.`);
         }),
         vscode.commands.registerCommand('vscode-debug-mcp.copyClaudeCodeCommand', async () => {
@@ -215,14 +172,6 @@ export function activate(context: vscode.ExtensionContext) {
             if (newPort) {
                 const portNum = parseInt(newPort);
                 await updatedConfig.update('port', portNum, vscode.ConfigurationTarget.Global);
-
-                // Update port configuration file
-                try {
-                    const portConfigPath = path.join(storagePath, 'port-config.json');
-                    fs.writeFileSync(portConfigPath, JSON.stringify({ port: portNum }));
-                } catch (err: any) {
-                    vscode.window.showErrorMessage(`Failed to write port configuration: ${err.message}`);
-                }
 
                 // Update server's port setting directly
                 server.setPort(portNum);

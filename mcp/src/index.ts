@@ -6,35 +6,57 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
-// Try to read port from config file, fallback to default
+// Determine the global storage path based on platform
+function getStoragePath(): string {
+    const homeDir = os.homedir();
+    if (process.platform === 'darwin') {
+        return path.join(homeDir, 'Library', 'Application Support', 'Code', 'User', 'globalStorage', 'peakbi.vscode-debug-mcp');
+    } else if (process.platform === 'win32') {
+        return path.join(homeDir, 'AppData', 'Roaming', 'Code', 'User', 'globalStorage', 'peakbi.vscode-debug-mcp');
+    } else {
+        return path.join(homeDir, '.config', 'Code', 'User', 'globalStorage', 'peakbi.vscode-debug-mcp');
+    }
+}
+
+// Look up the port for the current working directory from the workspace-keyed registry
 function getPortFromConfig(): number {
     try {
-        // Determine the global storage path based on platform
-        let storagePath: string;
-        const homeDir = os.homedir();
-
-        if (process.platform === 'darwin') {
-            storagePath = path.join(homeDir, 'Library', 'Application Support', 'Code', 'User', 'globalStorage', 'peakbi.vscode-debug-mcp');
-        } else if (process.platform === 'win32') {
-            storagePath = path.join(homeDir, 'AppData', 'Roaming', 'Code', 'User', 'globalStorage', 'peakbi.vscode-debug-mcp');
-        } else {
-            // Linux and others
-            storagePath = path.join(homeDir, '.config', 'Code', 'User', 'globalStorage', 'peakbi.vscode-debug-mcp');
+        const configPath = path.join(getStoragePath(), 'port-config.json');
+        if (!fs.existsSync(configPath)) {
+            return 4711;
         }
 
-        const configPath = path.join(storagePath, 'port-config.json');
+        const registry: Record<string, number> = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
-        if (fs.existsSync(configPath)) {
-            const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-            if (config && typeof config.port === 'number') {
-                return config.port;
+        // Match CWD against registered workspace paths (longest match wins)
+        const cwd = process.cwd();
+        let bestMatch = '';
+        let bestPort: number | null = null;
+
+        for (const [workspacePath, port] of Object.entries(registry)) {
+            if (typeof port !== 'number') { continue; }
+            if (cwd === workspacePath || cwd.startsWith(workspacePath + path.sep)) {
+                if (workspacePath.length > bestMatch.length) {
+                    bestMatch = workspacePath;
+                    bestPort = port;
+                }
             }
+        }
+
+        if (bestPort !== null) {
+            return bestPort;
+        }
+
+        // No CWD match — fall back to any registered port (single-window case)
+        const ports = Object.values(registry).filter((v): v is number => typeof v === 'number');
+        if (ports.length > 0) {
+            return ports[0];
         }
     } catch (error) {
         console.error('Error reading port config:', error);
     }
 
-    return 4711; // Default port
+    return 4711;
 }
 
 async function makeRequest(payload: any): Promise<any> {

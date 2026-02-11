@@ -4,6 +4,19 @@ All notable changes to the "vscode-debug-mcp" extension will be documented in th
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.3.0](https://github.com/PeakBI/vscode-debug-mcp/compare/v0.2.0...v0.3.0) (2026-02-11)
+
+
+### Features
+
+* add listConfigurations action to debug_execute ([e27b96b](https://github.com/PeakBI/vscode-debug-mcp/commit/e27b96b85c10db991c6685908b625439390efedb))
+* add listConfigurations action to debug_execute ([a1ee479](https://github.com/PeakBI/vscode-debug-mcp/commit/a1ee47953910eb7728b9484b82ee5dd3b7a3fb37))
+
+
+### Bug Fixes
+
+* update bridge test expected action enum for listConfigurations ([c1e2c9d](https://github.com/PeakBI/vscode-debug-mcp/commit/c1e2c9d8dc0a0e591f7a8ac608f8955468e49266))
+
 ## [0.2.0](https://github.com/PeakBI/vscode-debug-mcp/compare/v0.1.1...v0.2.0) (2026-02-11)
 
 

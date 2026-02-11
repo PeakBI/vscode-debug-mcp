@@ -4,6 +4,21 @@ All notable changes to the "vscode-debug-mcp" extension will be documented in th
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.2.0](https://github.com/PeakBI/vscode-debug-mcp/compare/v0.1.1...v0.2.0) (2026-02-11)
+
+
+### Features
+
+* auto-switch ports for multi-window support ([69bd8aa](https://github.com/PeakBI/vscode-debug-mcp/commit/69bd8aaf99fee682f67e2a37aee3443eb34ea012))
+* auto-switch ports for multi-window support ([e17b903](https://github.com/PeakBI/vscode-debug-mcp/commit/e17b90345dcd035d1608d598b5430fc0e505f06d))
+* build VSIX artifact on pull requests ([f62ed7c](https://github.com/PeakBI/vscode-debug-mcp/commit/f62ed7c9c5d4ddc0ab24c919ea46c6297ae2a8b8))
+
+
+### Bug Fixes
+
+* resolve port-config.json lookup for Remote Tunnels ([37468b4](https://github.com/PeakBI/vscode-debug-mcp/commit/37468b49e9e3924df3dd1aef75fec40c559dc5bc))
+* resolve port-config.json lookup for Remote Tunnels ([4fd0ac1](https://github.com/PeakBI/vscode-debug-mcp/commit/4fd0ac1ecdc0d2880bbcf56423e2bcc5b4f9ba7e))
+
 ## [0.1.1](https://github.com/PeakBI/vscode-debug-mcp/compare/v0.1.0...v0.1.1) (2026-02-10)
 
 

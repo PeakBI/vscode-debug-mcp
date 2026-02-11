@@ -152,7 +152,7 @@ describe('Stdio Bridge', () => {
         const result = await client.listTools();
         const tool = result.tools.find(t => t.name === 'debug_execute')!;
         const actionProp = (tool.inputSchema.properties as any)?.action;
-        expect(actionProp.enum).toEqual(['launch', 'stop', 'continue', 'stepOver', 'stepIn', 'stepOut']);
+        expect(actionProp.enum).toEqual(['launch', 'stop', 'continue', 'stepOver', 'stepIn', 'stepOut', 'listConfigurations']);
     });
 
     it('debug_breakpoints tool has correct action enum', async () => {

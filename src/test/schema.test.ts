@@ -55,7 +55,7 @@ suite('Schema Consistency', () => {
         const actionEnum = (tool.inputSchema.properties.action as any).enum;
         assert.deepStrictEqual(
             actionEnum,
-            ['launch', 'stop', 'continue', 'stepOver', 'stepIn', 'stepOut']
+            ['launch', 'stop', 'continue', 'stepOver', 'stepIn', 'stepOut', 'listConfigurations']
         );
     });
 

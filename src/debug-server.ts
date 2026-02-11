@@ -43,11 +43,12 @@ The program must be paused (at a breakpoint or after a step) before you can insp
 
 // Tool descriptions
 const executeDescription = `Control debug session execution. Actions:
+- listConfigurations: List available launch.json configurations. Returns configuration names. Call this before launch to verify the correct configuration name.
 - launch: Start a debug session using a launch.json configuration. Returns the stopped location if a breakpoint is hit, or a status message if the program is still running after 10s.
 - continue: Resume execution until the next breakpoint. Returns the new stopped location.
 - stepOver/stepIn/stepOut: Step through code. Returns the new stopped location and stack trace.
 - stop: End the debug session.
-Requires an active debug session for all actions except launch.`;
+Requires an active debug session for all actions except launch and listConfigurations.`;
 
 const breakpointsDescription = `Manage source breakpoints in VS Code. Actions:
 - set: Add a breakpoint at a file:line. Returns confirmation with the location.
@@ -62,7 +63,7 @@ Requires an active debug session that is paused.`;
 
 // Zod schemas for the 3 tools
 const executeInputSchema = {
-    action: z.enum(["launch", "stop", "continue", "stepOver", "stepIn", "stepOut"]).describe("The execution action to perform"),
+    action: z.enum(["launch", "stop", "continue", "stepOver", "stepIn", "stepOut", "listConfigurations"]).describe("The execution action to perform"),
     configurationName: z.string().optional().describe("Name of the launch.json configuration to use (only for launch). If omitted with multiple configs, returns the available names so you can choose."),
     noDebug: z.boolean().optional().describe("If true, launch without debugging (only for launch)"),
     threadId: z.number().optional().describe("Thread ID to operate on (for continue/step*). If omitted, uses the active thread."),
@@ -96,7 +97,7 @@ export const tools = [
         inputSchema: {
             type: "object",
             properties: {
-                action: { type: "string", enum: ["launch", "stop", "continue", "stepOver", "stepIn", "stepOut"], description: "The execution action to perform" },
+                action: { type: "string", enum: ["launch", "stop", "continue", "stepOver", "stepIn", "stepOut", "listConfigurations"], description: "The execution action to perform" },
                 configurationName: { type: "string", description: "Name of the launch.json configuration to use (only for launch). If omitted with multiple configs, returns the available names so you can choose." },
                 noDebug: { type: "boolean", description: "If true, launch without debugging (only for launch)" },
                 threadId: { type: "number", description: "Thread ID to operate on (for continue/step*)" },
@@ -580,6 +581,21 @@ export class DebugServer extends EventEmitter implements DebugServerEvents {
                     };
                 }
                 return { message: result.reason };
+            }
+
+            case 'listConfigurations': {
+                const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+                if (!workspaceFolder) {
+                    throw new Error('No workspace folder found');
+                }
+                const launchConfig = vscode.workspace.getConfiguration('launch', workspaceFolder.uri);
+                const configurations = launchConfig.get<any[]>('configurations');
+                if (!configurations || configurations.length === 0) {
+                    return { message: 'No debug configurations found in launch.json', configurations: [] };
+                }
+                return {
+                    configurations: configurations.map(c => ({ name: c.name, type: c.type, request: c.request })),
+                };
             }
 
             default:

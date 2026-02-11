@@ -6,8 +6,18 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
-// Determine the global storage path based on platform
+// Determine the global storage path.
+// The extension copies this script AND port-config.json into the same globalStorage
+// directory, so check the script's own directory first. This works for all environments
+// (desktop, SSH Remote, Remote Tunnels) regardless of platform-specific paths.
 function getStoragePath(): string {
+    // Check the directory this script is running from
+    const scriptDir = path.dirname(process.argv[1] || '');
+    if (scriptDir && fs.existsSync(path.join(scriptDir, 'port-config.json'))) {
+        return scriptDir;
+    }
+
+    // Fall back to platform-specific VS Code desktop paths
     const homeDir = os.homedir();
     if (process.platform === 'darwin') {
         return path.join(homeDir, 'Library', 'Application Support', 'Code', 'User', 'globalStorage', 'peakbi.vscode-debug-mcp');
@@ -193,18 +203,24 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 });
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const response = await makeRequest({
-        type: 'callTool',
-        tool: request.params.name,
-        arguments: request.params.arguments
-    });
+    try {
+        const response = await makeRequest({
+            type: 'callTool',
+            tool: request.params.name,
+            arguments: request.params.arguments
+        });
 
-    return {
-        content: [{
-            type: "text",
-            text: typeof response === 'string' ? response : JSON.stringify(response)
-        }]
-    };
+        return {
+            content: [{
+                type: "text",
+                text: typeof response === 'string' ? response : JSON.stringify(response)
+            }]
+        };
+    } catch (error) {
+        const port = getPortFromConfig();
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(`Failed to call tool "${request.params.name}" via localhost:${port}: ${message}`);
+    }
 });
 
 function sleep(ms: number) {

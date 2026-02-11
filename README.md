@@ -119,6 +119,27 @@ Both paths use the VS Code Debug API under the hood, which means the extension w
 vsce package
 ```
 
+## Release Process
+
+This project uses [conventional commits](https://www.conventionalcommits.org/) and [release-please](https://github.com/googleapis/release-please) for automated versioning and releases.
+
+### Commit Messages
+
+All commits should follow the conventional commits format:
+
+- `fix:` — Bug fixes (patch version bump)
+- `feat:` — New features (minor version bump)
+- `feat!:` / `fix!:` / `refactor!:` — Breaking changes (major version bump)
+- `chore:`, `docs:`, `refactor:`, `test:` — No version bump
+
+### PR Testing
+
+Every pull request automatically builds a `.vsix` artifact via CI. Download it from the GitHub Actions "Artifacts" section on the PR's checks to install and test the extension locally before merging.
+
+### Releasing
+
+When conventional commits are pushed to `main`, release-please automatically opens (or updates) a Release PR with a version bump and changelog entry. Merging that PR creates a GitHub release and builds the final `.vsix`, which is uploaded to the release assets.
+
 ## Acknowledgements
 
 This project is a fork of [Claude Debugs For You](https://github.com/jasonjmcghee/claude-debugs-for-you) by [Jason McGhee](https://github.com/jasonjmcghee). Thank you for creating the original extension and MCP server that this project builds upon.

@@ -74,12 +74,15 @@ jobs:
         run: cd mcp && npm ci
 
       - name: Package VSIX
-        run: npx @vscode/vsce package --no-dependencies
+        run: |
+          npx @vscode/vsce package --no-dependencies
+          HASH=$(git rev-parse --short HEAD)
+          mv *.vsix "vscode-debug-mcp-pr${{ github.event.number }}-${HASH}.vsix"
 
       - name: Upload VSIX as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: vsix
+          name: vsix-pr${{ github.event.number }}
           path: "*.vsix"
 
   test-mcp-bridge:

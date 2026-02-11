@@ -130,11 +130,12 @@ const server = new Server(
 );
 
 const executeDescription = `Control debug session execution. Actions:
+- listConfigurations: List available launch.json configurations. Returns configuration names. Call this before launch to verify the correct configuration name.
 - launch: Start a debug session using a launch.json configuration. Returns the stopped location if a breakpoint is hit, or a status message if the program is still running after 10s.
 - continue: Resume execution until the next breakpoint. Returns the new stopped location.
 - stepOver/stepIn/stepOut: Step through code. Returns the new stopped location and stack trace.
 - stop: End the debug session.
-Requires an active debug session for all actions except launch.`;
+Requires an active debug session for all actions except launch and listConfigurations.`;
 
 const breakpointsDescription = `Manage source breakpoints in VS Code. Actions:
 - set: Add a breakpoint at a file:line. Returns confirmation with the location.
@@ -154,7 +155,7 @@ const tools = [
         inputSchema: {
             type: "object",
             properties: {
-                action: { type: "string", enum: ["launch", "stop", "continue", "stepOver", "stepIn", "stepOut"], description: "The execution action to perform" },
+                action: { type: "string", enum: ["launch", "stop", "continue", "stepOver", "stepIn", "stepOut", "listConfigurations"], description: "The execution action to perform" },
                 configurationName: { type: "string", description: "Name of the launch.json configuration to use (only for launch). If omitted with multiple configs, returns the available names so you can choose." },
                 noDebug: { type: "boolean", description: "If true, launch without debugging (only for launch)" },
                 threadId: { type: "number", description: "Thread ID to operate on (for continue/step*)" },

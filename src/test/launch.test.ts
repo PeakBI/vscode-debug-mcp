@@ -57,6 +57,14 @@ suite('Launch Configuration Resolution', function () {
         }
     });
 
+    test('listConfigurations returns available configurations', async () => {
+        const result = await callTool('debug_execute', { action: 'listConfigurations' });
+        assert.ok(Array.isArray(result.configurations));
+        assert.strictEqual(result.configurations.length, 2);
+        assert.deepStrictEqual(result.configurations[0], { name: 'Launch Program', type: 'node', request: 'launch' });
+        assert.deepStrictEqual(result.configurations[1], { name: 'Launch Tests', type: 'node', request: 'launch' });
+    });
+
     test('unknown execute action throws', async () => {
         await assert.rejects(
             callTool('debug_execute', { action: 'bogus' }),

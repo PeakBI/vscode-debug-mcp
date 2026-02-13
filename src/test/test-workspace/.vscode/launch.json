@@ -18,6 +18,12 @@
             "request": "launch",
             "name": "Launch Multi-File",
             "program": "${workspaceFolder}/multi-file-app.js"
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Launch Exception App",
+            "program": "${workspaceFolder}/exception-app.js"
         }
     ]
 }

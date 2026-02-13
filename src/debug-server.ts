@@ -365,9 +365,9 @@ export class DebugServer extends EventEmitter implements DebugServerEvents {
 
     private async executeAndWaitForStop(
         session: vscode.DebugSession,
-        dapCommand: string,
-        dapArgs: any
-    ): Promise<{ stopped: true; state: StoppedState } | { stopped: false; reason: string }> {
+        executeFn: () => Promise<void>,
+        fallbackThreadId?: number
+    ): Promise<{ stopped: true; state: StoppedState; stopReason?: string; description?: string; exceptionText?: string } | { stopped: false; reason: string }> {
         return new Promise(async (resolve) => {
             let resolved = false;
 
@@ -386,9 +386,14 @@ export class DebugServer extends EventEmitter implements DebugServerEvents {
                     resolved = true;
                     cleanup();
                     try {
-                        const threadId = body?.threadId ?? dapArgs.threadId;
+                        const threadId = body?.threadId ?? fallbackThreadId;
                         const state = await this.gatherStoppedState(session, threadId);
-                        resolve({ stopped: true, state });
+                        // Pass through DAP stop metadata so callers can
+                        // distinguish breakpoints from exceptions, etc.
+                        const stopReason: string | undefined = body?.reason;
+                        const description: string | undefined = body?.description;
+                        const exceptionText: string | undefined = body?.text;
+                        resolve({ stopped: true, state, stopReason, description, exceptionText });
                     } catch (err) {
                         resolve({ stopped: false, reason: `Stopped but failed to get state: ${err instanceof Error ? err.message : String(err)}` });
                     }
@@ -412,12 +417,12 @@ export class DebugServer extends EventEmitter implements DebugServerEvents {
             }, 10000);
 
             try {
-                await session.customRequest(dapCommand, dapArgs);
+                await executeFn();
             } catch (err) {
                 if (!resolved) {
                     resolved = true;
                     cleanup();
-                    resolve({ stopped: false, reason: `DAP request '${dapCommand}' failed: ${err instanceof Error ? err.message : String(err)}` });
+                    resolve({ stopped: false, reason: `Execution failed: ${err instanceof Error ? err.message : String(err)}` });
                 }
             }
         });
@@ -448,10 +453,22 @@ export class DebugServer extends EventEmitter implements DebugServerEvents {
                         return;
                     }
                     const state = await this.gatherStoppedState(session, threadId);
-                    resolve({
-                        message: `Debug session started - stopped at ${state.file}:${state.line}`,
+                    const stopReason: string | undefined = body?.reason;
+                    const stopDescription: string | undefined = body?.description;
+                    const exceptionText: string | undefined = body?.text;
+                    const reasonSuffix = stopReason ? ` (${stopReason})` : '';
+                    const response: any = {
+                        message: `Debug session started - stopped at ${state.file}:${state.line}${reasonSuffix}`,
+                        reason: stopReason,
                         ...state,
-                    });
+                    };
+                    if (stopDescription) {
+                        response.description = stopDescription;
+                    }
+                    if (exceptionText) {
+                        response.exceptionText = exceptionText;
+                    }
+                    resolve(response);
                 } catch (err) {
                     resolve({ message: `Debug session started - stopped but failed to get state: ${err instanceof Error ? err.message : String(err)}` });
                 }
@@ -580,25 +597,55 @@ export class DebugServer extends EventEmitter implements DebugServerEvents {
 
                 const threadId = await this.resolveThreadId(session, args.threadId);
 
-                const dapCommandMap: Record<string, string> = {
-                    'continue': 'continue',
-                    'stepOver': 'next',
-                    'stepIn': 'stepIn',
-                    'stepOut': 'stepOut',
-                };
+                // Use VS Code's high-level commands by default so the internal
+                // debug model state is properly updated (transitions to "running"
+                // then back to "stopped"). This ensures the UI correctly shows
+                // exceptions, hit breakpoints, etc.
+                // Fall back to DAP customRequest only when the caller needs
+                // features the high-level commands don't support (explicit
+                // threadId or stepping granularity).
+                const useCustomRequest = args.threadId !== undefined || (args.granularity && args.action !== 'continue');
 
-                const dapCommand = dapCommandMap[args.action];
-                const dapArgs: any = { threadId };
-                if (args.granularity && args.action !== 'continue') {
-                    dapArgs.granularity = args.granularity;
+                let executeFn: () => Promise<void>;
+                if (useCustomRequest) {
+                    const dapCommandMap: Record<string, string> = {
+                        'continue': 'continue',
+                        'stepOver': 'next',
+                        'stepIn': 'stepIn',
+                        'stepOut': 'stepOut',
+                    };
+                    const dapCommand = dapCommandMap[args.action];
+                    const dapArgs: any = { threadId };
+                    if (args.granularity && args.action !== 'continue') {
+                        dapArgs.granularity = args.granularity;
+                    }
+                    executeFn = () => session.customRequest(dapCommand, dapArgs);
+                } else {
+                    const vscodeCommandMap: Record<string, string> = {
+                        'continue': 'workbench.action.debug.continue',
+                        'stepOver': 'workbench.action.debug.stepOver',
+                        'stepIn': 'workbench.action.debug.stepInto',
+                        'stepOut': 'workbench.action.debug.stepOut',
+                    };
+                    const vscodeCommand = vscodeCommandMap[args.action];
+                    executeFn = () => vscode.commands.executeCommand(vscodeCommand);
                 }
 
-                const result = await this.executeAndWaitForStop(session, dapCommand, dapArgs);
+                const result = await this.executeAndWaitForStop(session, executeFn, threadId);
                 if (result.stopped) {
-                    return {
-                        message: `${args.action} completed - stopped at ${result.state.file}:${result.state.line}`,
+                    const reasonSuffix = result.stopReason ? ` (${result.stopReason})` : '';
+                    const response: any = {
+                        message: `${args.action} completed - stopped at ${result.state.file}:${result.state.line}${reasonSuffix}`,
+                        reason: result.stopReason,
                         ...result.state,
                     };
+                    if (result.description) {
+                        response.description = result.description;
+                    }
+                    if (result.exceptionText) {
+                        response.exceptionText = result.exceptionText;
+                    }
+                    return response;
                 }
                 return { message: result.reason };
             }

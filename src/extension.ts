@@ -4,6 +4,9 @@ import { DebugTreeDataProvider } from './debug-tree-provider';
 import * as fs from 'fs';
 import * as path from 'path';
 
+let serverInstance: DebugServer | undefined;
+let cleanupPorts: (() => void) | undefined;
+
 export function activate(context: vscode.ExtensionContext) {
     // Get the storage path for your extension
     const storagePath = context.globalStorageUri.fsPath;
@@ -63,6 +66,13 @@ export function activate(context: vscode.ExtensionContext) {
     const port = config.get<number>('port') ?? 4711;
 
     const server = new DebugServer(port);
+    serverInstance = server;
+    cleanupPorts = unregisterWorkspacePorts;
+
+    // Ensure server stops when extension is disposed
+    context.subscriptions.push({
+        dispose: () => { server.stop(); unregisterWorkspacePorts(); }
+    });
 
     // Create tree view provider for the debug panel
     const treeProvider = new DebugTreeDataProvider(server, port, mcpServerPath);
@@ -199,6 +209,11 @@ export function activate(context: vscode.ExtensionContext) {
     );
 }
 
-export function deactivate() {
-    // We should already have cleaned up during context disposal, but just in case
+export async function deactivate() {
+    cleanupPorts?.();
+    cleanupPorts = undefined;
+    if (serverInstance) {
+        await serverInstance.stop();
+        serverInstance = undefined;
+    }
 }

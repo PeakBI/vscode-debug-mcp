@@ -4,6 +4,14 @@ All notable changes to the "vscode-debug-mcp" extension will be documented in th
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.3.2](https://github.com/PeakBI/vscode-debug-mcp/compare/v0.3.1...v0.3.2) (2026-02-13)
+
+
+### Bug Fixes
+
+* stop server and clean up ports on extension deactivate ([faaca68](https://github.com/PeakBI/vscode-debug-mcp/commit/faaca6864609ad4520449c241e425b9f4f87aade))
+* stop server and clean up ports on extension deactivate ([7d726aa](https://github.com/PeakBI/vscode-debug-mcp/commit/7d726aa41a1c47734ac80f97d9d735b640d9f552))
+
 ## [0.3.1](https://github.com/PeakBI/vscode-debug-mcp/compare/v0.3.0...v0.3.1) (2026-02-13)
 
 

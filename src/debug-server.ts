@@ -147,10 +147,31 @@ export class DebugServer extends EventEmitter implements DebugServerEvents {
     private activeTransports: Record<string, SSEServerTransport> = {};
     private mcpServer: McpServer;
     private _isRunning: boolean = false;
+    private stoppedEmitter = new vscode.EventEmitter<{ session: vscode.DebugSession; body: any }>();
+    private trackerDisposable: vscode.Disposable;
 
     constructor(port?: number) {
         super();
         this.port = port || 4711;
+
+        // Register a debug adapter tracker to reliably detect DAP stopped events.
+        // Using onDidChangeActiveStackItem is unreliable after customRequest('continue')
+        // because customRequest bypasses VS Code's internal debug model state updates —
+        // the model may not transition to "running", so when the next stopped event
+        // arrives, activeStackItem doesn't change and the event never fires.
+        this.trackerDisposable = vscode.debug.registerDebugAdapterTrackerFactory('*', {
+            createDebugAdapterTracker: (session: vscode.DebugSession) => {
+                const emitter = this.stoppedEmitter;
+                return {
+                    onDidSendMessage(message: any) {
+                        if (message.type === 'event' && message.event === 'stopped') {
+                            emitter.fire({ session, body: message.body });
+                        }
+                    }
+                };
+            }
+        });
+
         this.mcpServer = new McpServer({
             name: "Debug Server",
             version: "1.0.0",
@@ -351,19 +372,21 @@ export class DebugServer extends EventEmitter implements DebugServerEvents {
             let resolved = false;
 
             const cleanup = () => {
-                stackDisposable.dispose();
+                stoppedDisposable.dispose();
                 terminateDisposable.dispose();
                 clearTimeout(timer);
             };
 
-            const stackDisposable = vscode.debug.onDidChangeActiveStackItem(async (item) => {
+            // Listen for DAP stopped events directly from the debug adapter.
+            // This is more reliable than onDidChangeActiveStackItem because
+            // it doesn't depend on VS Code's debug model state.
+            const stoppedDisposable = this.stoppedEmitter.event(async ({ session: stoppedSession, body }) => {
                 if (resolved) { return; }
-                // When we stop at a breakpoint or step, activeStackItem changes
-                if (item instanceof vscode.DebugStackFrame || item instanceof vscode.DebugThread) {
+                if (stoppedSession === session) {
                     resolved = true;
                     cleanup();
                     try {
-                        const threadId = item instanceof vscode.DebugStackFrame ? item.threadId : item.threadId;
+                        const threadId = body?.threadId ?? dapArgs.threadId;
                         const state = await this.gatherStoppedState(session, threadId);
                         resolve({ stopped: true, state });
                     } catch (err) {
@@ -408,32 +431,29 @@ export class DebugServer extends EventEmitter implements DebugServerEvents {
             let resolved = false;
 
             const cleanup = () => {
-                stackDisposable.dispose();
+                stoppedDisposable.dispose();
                 terminateDisposable.dispose();
                 clearTimeout(timer);
             };
 
-            // Listen for stop events (breakpoint hit, etc.)
-            const stackDisposable = vscode.debug.onDidChangeActiveStackItem(async (item) => {
+            // Listen for DAP stopped events directly from the debug adapter
+            const stoppedDisposable = this.stoppedEmitter.event(async ({ session, body }) => {
                 if (resolved) { return; }
-                if (item instanceof vscode.DebugStackFrame || item instanceof vscode.DebugThread) {
-                    resolved = true;
-                    cleanup();
-                    try {
-                        const session = vscode.debug.activeDebugSession;
-                        if (!session) {
-                            resolve({ message: 'Debug session started but no active session found' });
-                            return;
-                        }
-                        const threadId = item instanceof vscode.DebugStackFrame ? item.threadId : item.threadId;
-                        const state = await this.gatherStoppedState(session, threadId);
-                        resolve({
-                            message: `Debug session started - stopped at ${state.file}:${state.line}`,
-                            ...state,
-                        });
-                    } catch (err) {
-                        resolve({ message: `Debug session started - stopped but failed to get state: ${err instanceof Error ? err.message : String(err)}` });
+                resolved = true;
+                cleanup();
+                try {
+                    const threadId = body?.threadId;
+                    if (threadId === undefined) {
+                        resolve({ message: 'Debug session started but no thread ID in stopped event' });
+                        return;
                     }
+                    const state = await this.gatherStoppedState(session, threadId);
+                    resolve({
+                        message: `Debug session started - stopped at ${state.file}:${state.line}`,
+                        ...state,
+                    });
+                } catch (err) {
+                    resolve({ message: `Debug session started - stopped but failed to get state: ${err instanceof Error ? err.message : String(err)}` });
                 }
             });
 
@@ -711,15 +731,10 @@ export class DebugServer extends EventEmitter implements DebugServerEvents {
                 let frameId = args.frameId;
 
                 if (frameId === undefined) {
-                    // Try to get frameId from activeStackItem
-                    const activeStackItem = vscode.debug.activeStackItem;
-                    if (activeStackItem instanceof vscode.DebugStackFrame) {
-                        frameId = activeStackItem.frameId;
-                    }
-                }
-
-                if (frameId === undefined) {
-                    // Fall back to getting top frame from stack trace
+                    // Get the top frame from a fresh stack trace request.
+                    // We don't use activeStackItem.frameId because the tracker-based
+                    // stop detection resolves before VS Code updates activeStackItem,
+                    // which would give us a stale frame ID from the previous stop.
                     const threadId = await this.resolveThreadId(session, args.threadId);
                     const frames = await session.customRequest('stackTrace', { threadId });
                     if (!frames?.stackFrames?.length) {
@@ -781,6 +796,9 @@ export class DebugServer extends EventEmitter implements DebugServerEvents {
 
     stop(): Promise<void> {
         return new Promise((resolve) => {
+            this.trackerDisposable.dispose();
+            this.stoppedEmitter.dispose();
+
             if (!this.server) {
                 this._isRunning = false;
                 this.emit('stopped');

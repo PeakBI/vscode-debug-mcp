@@ -24,9 +24,10 @@ suite('Launch Configuration Resolution', function () {
             'Multiple debug configurations available. Specify configurationName.'
         );
         assert.ok(Array.isArray(result.configurations));
-        assert.strictEqual(result.configurations.length, 2);
+        assert.strictEqual(result.configurations.length, 3);
         assert.ok(result.configurations.includes('Launch Program'));
         assert.ok(result.configurations.includes('Launch Tests'));
+        assert.ok(result.configurations.includes('Launch Multi-File'));
     });
 
     test('configurationName not found throws with available names', async () => {
@@ -60,9 +61,10 @@ suite('Launch Configuration Resolution', function () {
     test('listConfigurations returns available configurations', async () => {
         const result = await callTool('debug_execute', { action: 'listConfigurations' });
         assert.ok(Array.isArray(result.configurations));
-        assert.strictEqual(result.configurations.length, 2);
+        assert.strictEqual(result.configurations.length, 3);
         assert.deepStrictEqual(result.configurations[0], { name: 'Launch Program', type: 'node', request: 'launch' });
         assert.deepStrictEqual(result.configurations[1], { name: 'Launch Tests', type: 'node', request: 'launch' });
+        assert.deepStrictEqual(result.configurations[2], { name: 'Launch Multi-File', type: 'node', request: 'launch' });
     });
 
     test('unknown execute action throws', async () => {

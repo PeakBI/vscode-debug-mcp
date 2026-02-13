@@ -18,12 +18,6 @@ async function ensureNoDebugSession(): Promise<void> {
 suite('Edge Cases and Optional Parameters', function () {
     this.timeout(30000);
 
-    // These tests launch debug sessions which are unreliable in CI
-    if (process.env.CI) {
-        test('skipped in CI (requires interactive debugger)', function () { this.skip(); });
-        return;
-    }
-
     let server: DebugServer;
     let appPath: string;
 

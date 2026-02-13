@@ -22,12 +22,6 @@ import { TEST_PORT, callTool } from './test-helpers';
 suite('Cross-File Continue', function () {
     this.timeout(30000);
 
-    // These tests depend on debugger stepping which is unreliable in CI
-    if (process.env.CI) {
-        test('skipped in CI (requires interactive debugger)', function () { this.skip(); });
-        return;
-    }
-
     let server: DebugServer;
     let multiFileAppPath: string;
     let utilsPath: string;

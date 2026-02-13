@@ -4,6 +4,14 @@ All notable changes to the "vscode-debug-mcp" extension will be documented in th
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.3.3](https://github.com/PeakBI/vscode-debug-mcp/compare/v0.3.2...v0.3.3) (2026-02-13)
+
+
+### Bug Fixes
+
+* use VS Code commands for continue/step to fix exception UI ([f85e73b](https://github.com/PeakBI/vscode-debug-mcp/commit/f85e73b97acd3d4cdeda860e1800310f3833ed7d))
+* use VS Code commands for continue/step to fix exception UI and pass stop reason to LLM ([e34c467](https://github.com/PeakBI/vscode-debug-mcp/commit/e34c4678e6911b883c31a53797910b7cb90cd2b2))
+
 ## [0.3.2](https://github.com/PeakBI/vscode-debug-mcp/compare/v0.3.1...v0.3.2) (2026-02-13)
 
 

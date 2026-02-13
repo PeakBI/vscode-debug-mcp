@@ -12,6 +12,12 @@
             "request": "launch",
             "name": "Launch Tests",
             "program": "${workspaceFolder}/test.js"
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Launch Multi-File",
+            "program": "${workspaceFolder}/multi-file-app.js"
         }
     ]
 }

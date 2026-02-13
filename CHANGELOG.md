@@ -4,6 +4,14 @@ All notable changes to the "vscode-debug-mcp" extension will be documented in th
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.3.1](https://github.com/PeakBI/vscode-debug-mcp/compare/v0.3.0...v0.3.1) (2026-02-13)
+
+
+### Bug Fixes
+
+* use DebugAdapterTracker for reliable stop detection ([f2b57cd](https://github.com/PeakBI/vscode-debug-mcp/commit/f2b57cd2f4dbc10c6742fcceda8ee1770b0b87cd))
+* use DebugAdapterTracker for reliable stop detection ([c6bddf3](https://github.com/PeakBI/vscode-debug-mcp/commit/c6bddf3d7eb46a5403e5ec5865df8c658662845b))
+
 ## [0.3.0](https://github.com/PeakBI/vscode-debug-mcp/compare/v0.2.0...v0.3.0) (2026-02-11)
 
 

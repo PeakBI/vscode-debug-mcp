@@ -57,7 +57,7 @@ const breakpointsDescription = `Manage source breakpoints in VS Code. Actions:
 File paths must be absolute. Breakpoints persist across debug sessions.`;
 
 const inspectDescription = `Inspect program state while paused at a breakpoint. Actions:
-- evaluate: Evaluate an expression (variable name, method call, condition) in the current stack frame. Returns the result value and type.
+- evaluate: Evaluate an expression (variable name, method call, condition) in the current stack frame. Returns the result value and type. Any stdout/stderr produced during evaluation (e.g. from print()) is captured in the "output" and "stderr" response fields.
 - stackTrace: Get the current call stack. Returns an array of frames with file, line, column, and function name.
 Requires an active debug session that is paused.`;
 
@@ -148,6 +148,7 @@ export class DebugServer extends EventEmitter implements DebugServerEvents {
     private mcpServer: McpServer;
     private _isRunning: boolean = false;
     private stoppedEmitter = new vscode.EventEmitter<{ session: vscode.DebugSession; body: any }>();
+    private outputEmitter = new vscode.EventEmitter<{ session: vscode.DebugSession; body: any }>();
     private trackerDisposable: vscode.Disposable;
 
     constructor(port?: number) {
@@ -161,11 +162,14 @@ export class DebugServer extends EventEmitter implements DebugServerEvents {
         // arrives, activeStackItem doesn't change and the event never fires.
         this.trackerDisposable = vscode.debug.registerDebugAdapterTrackerFactory('*', {
             createDebugAdapterTracker: (session: vscode.DebugSession) => {
-                const emitter = this.stoppedEmitter;
+                const stoppedEmitter = this.stoppedEmitter;
+                const outputEmitter = this.outputEmitter;
                 return {
                     onDidSendMessage(message: any) {
                         if (message.type === 'event' && message.event === 'stopped') {
-                            emitter.fire({ session, body: message.body });
+                            stoppedEmitter.fire({ session, body: message.body });
+                        } else if (message.type === 'event' && message.event === 'output') {
+                            outputEmitter.fire({ session, body: message.body });
                         }
                     }
                 };
@@ -790,17 +794,48 @@ export class DebugServer extends EventEmitter implements DebugServerEvents {
                     frameId = frames.stackFrames[0].id;
                 }
 
-                const response = await session.customRequest('evaluate', {
-                    expression: args.expression,
-                    frameId,
-                    context: args.context || 'repl',
+                // Capture stdout/stderr produced during evaluation (e.g. from print()).
+                // Some debuggers (debugpy) use exec() for multi-statement expressions,
+                // which returns None — but any output is emitted as DAP output events.
+                const stdoutChunks: string[] = [];
+                const stderrChunks: string[] = [];
+                const outputListener = this.outputEmitter.event(({ session: outputSession, body }) => {
+                    if (outputSession === session && body?.output) {
+                        if (body.category === 'stderr') {
+                            stderrChunks.push(body.output);
+                        } else if (body.category === 'stdout' || body.category === 'console') {
+                            stdoutChunks.push(body.output);
+                        }
+                    }
                 });
 
-                return {
+                let response;
+                try {
+                    response = await session.customRequest('evaluate', {
+                        expression: args.expression,
+                        frameId,
+                        context: args.context || 'repl',
+                    });
+                } finally {
+                    outputListener.dispose();
+                }
+
+                const result: any = {
                     result: response.result,
                     type: response.type,
                     variablesReference: response.variablesReference,
                 };
+
+                const output = stdoutChunks.join('');
+                const stderr = stderrChunks.join('');
+                if (output) {
+                    result.output = output;
+                }
+                if (stderr) {
+                    result.stderr = stderr;
+                }
+
+                return result;
             }
 
             case 'stackTrace': {
@@ -845,6 +880,7 @@ export class DebugServer extends EventEmitter implements DebugServerEvents {
         return new Promise((resolve) => {
             this.trackerDisposable.dispose();
             this.stoppedEmitter.dispose();
+            this.outputEmitter.dispose();
 
             if (!this.server) {
                 this._isRunning = false;

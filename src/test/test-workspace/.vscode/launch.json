@@ -24,6 +24,12 @@
             "request": "launch",
             "name": "Launch Exception App",
             "program": "${workspaceFolder}/exception-app.js"
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Launch Console App",
+            "program": "${workspaceFolder}/console-app.js"
         }
     ]
 }

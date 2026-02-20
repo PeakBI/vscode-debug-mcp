@@ -144,7 +144,7 @@ const breakpointsDescription = `Manage source breakpoints in VS Code. Actions:
 File paths must be absolute. Breakpoints persist across debug sessions.`;
 
 const inspectDescription = `Inspect program state while paused at a breakpoint. Actions:
-- evaluate: Evaluate an expression (variable name, method call, condition) in the current stack frame. Returns the result value and type.
+- evaluate: Evaluate an expression (variable name, method call, condition) in the current stack frame. Returns the result value and type. Any stdout/stderr produced during evaluation (e.g. from print()) is captured in the "output" and "stderr" response fields.
 - stackTrace: Get the current call stack. Returns an array of frames with file, line, column, and function name.
 Requires an active debug session that is paused.`;
 

@@ -4,6 +4,14 @@ All notable changes to the "vscode-debug-mcp" extension will be documented in th
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.4.0](https://github.com/PeakBI/vscode-debug-mcp/compare/v0.3.3...v0.4.0) (2026-02-20)
+
+
+### Features
+
+* capture stdout/stderr during debug_inspect evaluate ([2a2ea7f](https://github.com/PeakBI/vscode-debug-mcp/commit/2a2ea7f4d2d85446db33c1d60fb602efede31d01))
+* capture stdout/stderr during debug_inspect evaluate ([1a8a9ea](https://github.com/PeakBI/vscode-debug-mcp/commit/1a8a9ea6ef558e7117014a9fb5ca55ed73816ad9)), closes [#23](https://github.com/PeakBI/vscode-debug-mcp/issues/23)
+
 ## [0.3.3](https://github.com/PeakBI/vscode-debug-mcp/compare/v0.3.2...v0.3.3) (2026-02-13)
 
 
